@@ -39,7 +39,7 @@
 <body>
     
 <div id="container">
-  <!-- LEFT SIDE: search + list -->/>
+  <!-- LEFT SIDE: search + list -->
  <div id="sidebar">
   <input id="search" placeholder="Zoek een plek...">
    <!-- places list gets filled by JavaScript -->
@@ -50,7 +50,6 @@
 <!-- RIGHT SIDE: map -->
   <div id="map"></div>
 </div>
-    //loading leaflet
 <!-- ===== LEAFLET MAP LIBRARY ===== -->
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <!-- ===== FUZZY SEARCH LIBRARY ===== -->
@@ -109,7 +108,9 @@ const fuse = new Fuse(places, {
     // 1. Create the map
      const map = L.map('map').setView([51.2194, 4.4025], 13); 
     // (antwerpss coordinates)
-
+map.on("click", () => {
+  clearDetails();
+});
     // 2. load map tiles (OpenStreetMap)
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors'
@@ -119,62 +120,85 @@ const fuse = new Fuse(places, {
   const sidebar = document.getElementById("sidebar");
   const listContainer = document.getElementById("list");
   const detailsContainer = document.getElementById("details");
-    function showDetails(place) {
+    let activePlace = null;
+
+function showDetails(place) {
+
+  // click same pin again → close
+  if (activePlace === place) {
+    clearDetails();
+    return;
+  }
+  activePlace = place;
+
   map.setView([place.lat, place.lng], 17);
-   detailsContainer.innerHTML = `...
+
+  detailsContainer.innerHTML = `
     <h3>${place.name}</h3>
-
     <img src="${place.image}" width="100%">
-
     <p>${place.description}</p>
-  `;}
+  `;
+}
+
+// keep track of markers so we can clear them when re-rendering
+let markers = [];
   
   // FUNCTION: render list + markers
-function renderPlaces(list) {
-    // clear old list so we can rebuild it
-  listContainer.innerHTML = "";
+  function renderPlaces(list) {
+    // clear list
+    listContainer.innerHTML = "";
 
-  list.forEach(place => {
+    // remove existing markers from map
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
 
-    // add marker to map
-    L.marker([place.lat, place.lng])
-  .addTo(map)
-  .on("click", () => showDetails(place))
-  .bindPopup(place.name);
+    list.forEach(place => {
+      // create marker
+      const marker = L.marker([place.lat, place.lng]).addTo(map);
+      marker.on("click", () => {
+        showDetails(place);
+      });
+      marker.bindPopup(place.name);
+      markers.push(marker);
 
-    // create clickable item list
-    const item = document.createElement("div");
+      // list item
+      const item = document.createElement("div");
+      item.textContent = place.name;
+      item.style.padding = "8px";
+      item.style.cursor = "pointer";
+      item.style.borderBottom = "1px solid #ccc";
+      item.onclick = () => {
+        showDetails(place);
+      };
 
-    item.innerHTML = place.name;
-    item.style.padding = "8px";
-    item.style.cursor = "pointer";
-    item.style.borderBottom = "1px solid #ccc";
-
-    item.onclick = () => showDetails(place);
- // add item to sidebar list
-    listContainer.appendChild(item);
-
-  
+      listContainer.appendChild(item);
     });
-  };
-
+  }
+function clearDetails() {
+  detailsContainer.innerHTML = "";
+  activePlace = null;
+}
     // SEARCH LOGIC
 const searchInput = document.getElementById("search");
 
 searchInput.addEventListener("input", () => {
-
-    // get what user typed
   const query = searchInput.value.trim();
-    // run fuzzy search
+
+  if (query === "") {
+    clearDetails();
+    renderPlaces(places);
+    return;
+  }
+
   const result = fuse.search(query);
-    // convert Fuse results into normal place objects
   const filtered = result.map(r => r.item);
-    // update map + list
+
+  clearDetails();
   renderPlaces(filtered);
 
 });
     // INITIAL LOAD
-  renderPlaces(places);
+renderPlaces(places); 
 
 </script>
 
