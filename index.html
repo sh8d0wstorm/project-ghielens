@@ -44,6 +44,8 @@
   <input id="search" placeholder="Zoek een plek...">
    <!-- places list gets filled by JavaScript -->
   <div id="list"></div>
+
+  <div id="details"></div>
 </div>
 <!-- RIGHT SIDE: map -->
   <div id="map"></div>
@@ -58,30 +60,44 @@
     const places = [
 
 {
-  name: "Waterloostraat 11 Antwerpen",
+   name: "Waterloostraat 11 Antwerpen",
   lat: 51.2033198,
   lng: 4.4314819,
-  keywords: ["snijwerk","hout"]
+  keywords: ["snijwerk","hout"],
+
+  image: "images/waterloostraat11.jpg",
+  description: "Snijwerk in hout."
+
 },
 
 {
   name: "Cogels-Osylei 4 Antwerpen",
   lat: 51.2051725,
   lng: 4.4326872,
-  keywords: ["kunst","gevel"]
+  keywords: ["kunst","gevel"],
+
+  image: "images/ghielens.png",
+  description: "Kunst aan de gevel."
+
 },
 
   {
   name: "Cogels-Osylei 12 Antwerpen",
   lat: 51.2048966,
   lng: 4.4327979,
-  keywords: ["cogels", "osylei", "gevel", "architectuur", "kunst"]
+  keywords: ["cogels", "osylei", "gevel", "architectuur", "kunst"],
+  
+  image: "images/ghielens.png",
+  description: "Kunst aan de gevel."
 },
 {
   name: "Cogels-Osylei 78 Antwerpen",
   lat: 51.2020336,
   lng: 4.4336004,
-  keywords: ["cogels", "osylei", "gevel", "huizen", "architectuur"]
+  keywords: ["cogels", "osylei", "gevel", "huizen", "architectuur"],
+
+  image: "images/ghielens.png",
+  description: "Kunst aan de gevel."   
 }
 ];
     // FUZZY SEARCH SETUP (Fuse.js)
@@ -102,7 +118,18 @@ const fuse = new Fuse(places, {
     // DOM ELEMENTS (HTML access)
   const sidebar = document.getElementById("sidebar");
   const listContainer = document.getElementById("list");
-    // FUNCTION: render list + markers
+  const detailsContainer = document.getElementById("details");
+    function showDetails(place) {
+  map.setView([place.lat, place.lng], 17);
+   detailsContainer.innerHTML = `...
+    <h3>${place.name}</h3>
+
+    <img src="${place.image}" width="100%">
+
+    <p>${place.description}</p>
+  `;}
+  
+  // FUNCTION: render list + markers
 function renderPlaces(list) {
     // clear old list so we can rebuild it
   listContainer.innerHTML = "";
@@ -111,8 +138,9 @@ function renderPlaces(list) {
 
     // add marker to map
     L.marker([place.lat, place.lng])
-      .addTo(map)
-      .bindPopup(place.name);
+  .addTo(map)
+  .on("click", () => showDetails(place))
+  .bindPopup(place.name);
 
     // create clickable item list
     const item = document.createElement("div");
@@ -122,14 +150,14 @@ function renderPlaces(list) {
     item.style.cursor = "pointer";
     item.style.borderBottom = "1px solid #ccc";
 
-    item.onclick = () => {
-      map.setView([place.lat, place.lng], 17);
-    };
-    // add item to sidebar list
+    item.onclick = () => showDetails(place);
+ // add item to sidebar list
     listContainer.appendChild(item);
 
-  });
-}
+  
+    });
+  };
+
     // SEARCH LOGIC
 const searchInput = document.getElementById("search");
 
