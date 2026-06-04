@@ -42,10 +42,13 @@
   <!-- LEFT SIDE: search + list -->
  <div id="sidebar">
   <input id="search" placeholder="Zoek een plek...">
-   <!-- places list gets filled by JavaScript -->
-  <div id="list"></div>
+   <!-- button login-->
+  <button onclick="login()">Login</button>
+<button id="addBtn" style="display:none;">Add location</button>
+<!-- places list gets filled by JavaScript -->
+<div id="list"></div>
 
-  <div id="details"></div>
+<div id="details"></div>
 </div>
 <!-- RIGHT SIDE: map -->
   <div id="map"></div>
@@ -56,8 +59,11 @@
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2"></script>
 <script>
     //locations
+    let adminMode = false;
+    let activePlace = null;
+    let markers = [];
+    // keep track of markers so we can clear them when re-rendering
     const places = [
-
 {
    name: "Waterloostraat 11 Antwerpen",
   lat: 51.2033198,
@@ -120,8 +126,7 @@ map.on("click", () => {
   const sidebar = document.getElementById("sidebar");
   const listContainer = document.getElementById("list");
   const detailsContainer = document.getElementById("details");
-    let activePlace = null;
-
+    
 function showDetails(place) {
 
   // click same pin again → close
@@ -139,12 +144,10 @@ function showDetails(place) {
     <p>${place.description}</p>
   `;
 }
-
 // keep track of markers so we can clear them when re-rendering
-let markers = [];
-  
   // FUNCTION: render list + markers
   function renderPlaces(list) {
+    
     // clear list
     listContainer.innerHTML = "";
 
@@ -199,7 +202,44 @@ searchInput.addEventListener("input", () => {
 });
     // INITIAL LOAD
 renderPlaces(places); 
+function login() {
+  const pw = prompt("Wachtwoord:");
 
+  if (pw === "1234") {
+    adminMode = true;
+    document.getElementById("addBtn").style.display = "block";
+    alert("Admin mode enabled");
+  } else {
+    alert("Fout wachtwoord");
+  }
+}
+
+document.getElementById("addBtn").onclick = () => {
+  if (!adminMode) return;
+
+  const name = prompt("Naam?");
+  const lat = Number(prompt("Latitude?"));
+  const lng = Number(prompt("Longitude?"));
+  const desc = prompt("Beschrijving?");
+  const img = prompt("Image path?");
+  const keywordsInput = prompt("Keywords (komma gescheiden)");
+
+  const newPlace = {
+    name,
+    lat,
+    lng,
+    description: desc,
+    image: img,
+    keywords: keywordsInput
+      ? keywordsInput.split(",").map(k => k.trim())
+      : []
+  };
+
+  places.push(newPlace);
+
+  // refresh map + list
+  renderPlaces(places);
+};
 </script>
 
 </body>
