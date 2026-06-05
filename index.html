@@ -32,6 +32,7 @@
 }   /* MAP AREA (takes remaining space) */
 #map {
   flex: 1;
+  height: 100vh; /* 🔥 THIS is the missing piece */
 }
   </style>
 </head>
@@ -42,9 +43,13 @@
   <!-- LEFT SIDE: search + list -->
  <div id="sidebar">
   <input id="search" placeholder="Zoek een plek...">
-   <!-- button login-->
-  <button onclick="login()">Login</button>
-<button id="addBtn" style="display:none;">Add location</button>
+
+  <button id="logoutBtn" onclick="logout()" style="display:none;">Logout</button>
+
+  <button id="addBtn" style="display:none;">Add location</button>
+
+  <button id="loginBtn" onclick="login()">Login</button>
+
 <!-- places list gets filled by JavaScript -->
 <div id="list"></div>
 
@@ -52,6 +57,8 @@
 </div>
 <!-- RIGHT SIDE: map -->
   <div id="map"></div>
+  
+</script>
 </div>
 <!-- ===== LEAFLET MAP LIBRARY ===== -->
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -59,7 +66,7 @@
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2"></script>
 <script>
     //locations
-    let adminMode = false;
+    let adminMode = true; // start in admin mode for testing
     let activePlace = null;
     let markers = [];
     // keep track of markers so we can clear them when re-rendering
@@ -200,18 +207,38 @@ searchInput.addEventListener("input", () => {
   renderPlaces(filtered);
 
 });
+function updateUI() {
+  document.getElementById("loginBtn").style.display = adminMode ? "none" : "inline-block";
+  document.getElementById("logoutBtn").style.display = adminMode ? "inline-block" : "none";
+  document.getElementById("addBtn").style.display = adminMode ? "inline-block" : "none";
+}
     // INITIAL LOAD
-renderPlaces(places); 
+renderPlaces(places);
+
 function login() {
   const pw = prompt("Wachtwoord:");
 
   if (pw === "1234") {
     adminMode = true;
-    document.getElementById("addBtn").style.display = "block";
+
+    document.getElementById("loginBtn").style.display = "none";
+    document.getElementById("logoutBtn").style.display = "inline-block";
+    document.getElementById("addBtn").style.display = "inline-block";
+
     alert("Admin mode enabled");
   } else {
     alert("Fout wachtwoord");
   }
+}
+
+function logout() {
+  adminMode = false;
+
+  document.getElementById("loginBtn").style.display = "inline-block";
+  document.getElementById("logoutBtn").style.display = "none";
+  document.getElementById("addBtn").style.display = "none";
+
+  alert("Uitgelogd");
 }
 
 document.getElementById("addBtn").onclick = () => {
@@ -237,7 +264,6 @@ document.getElementById("addBtn").onclick = () => {
 
   places.push(newPlace);
 
-  // refresh map + list
   renderPlaces(places);
 };
 </script>
