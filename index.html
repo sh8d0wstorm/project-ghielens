@@ -5,36 +5,9 @@
 
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    
-  <style>
-    /*basic page lay out*/
-   body {
-  margin: 0;/* removes default browser spacing */
-}
-    /* container holds sidebar + map side by side */
-#container {
-  display: flex;
-  height: 100vh;/* full screen height */
-}
-    /* LEFT SIDEBAR (search + list) */
-#sidebar {
-  width: 250px;
-  background: #f4f4f4;
-  overflow-y: auto;
-  padding: 10px;
-}
-    /* SEARCH BAR STYLE */
-#search {
-  width: 100%;
-  padding: 8px;
-  margin-bottom: 10px;
-  box-sizing: border-box;
-}   /* MAP AREA (takes remaining space) */
-#map {
-  flex: 1;
-  height: 100vh; /* 🔥 THIS is the missing piece */
-}
-  </style>
+    <!-- Custom CSS -->
+ <link rel="stylesheet" href="style.css">
+ 
 </head>
 
 <body>
@@ -42,6 +15,7 @@
 <div id="container">
   <!-- LEFT SIDE: search + list -->
  <div id="sidebar">
+ 
   <input id="search" placeholder="Zoek een plek...">
 
   <button id="logoutBtn" onclick="logout()" style="display:none;">Logout</button>
@@ -57,216 +31,12 @@
 </div>
 <!-- RIGHT SIDE: map -->
   <div id="map"></div>
-  
-</script>
-</div>
+ </div>
 <!-- ===== LEAFLET MAP LIBRARY ===== -->
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <!-- ===== FUZZY SEARCH LIBRARY ===== -->
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2"></script>
-<script>
-    //locations
-    let adminMode = true; // start in admin mode for testing
-    let activePlace = null;
-    let markers = [];
-    // keep track of markers so we can clear them when re-rendering
-    const places = [
-{
-   name: "Waterloostraat 11 Antwerpen",
-  lat: 51.2033198,
-  lng: 4.4314819,
-  keywords: ["snijwerk","hout"],
-
-  image: "images/ghielens.png",
-  description: "Snijwerk in hout."
-
-},
-
-{
-  name: "Cogels-Osylei 4 Antwerpen",
-  lat: 51.2051725,
-  lng: 4.4326872,
-  keywords: ["kunst","gevel"],
-
-  image: "images/ghielens.png",
-  description: "Kunst aan de gevel."
-
-},
-
-  {
-  name: "Cogels-Osylei 12 Antwerpen",
-  lat: 51.2048966,
-  lng: 4.4327979,
-  keywords: ["cogels", "osylei", "gevel", "architectuur", "kunst"],
-  
-  image: "images/ghielens.png",
-  description: "Kunst aan de gevel."
-},
-{
-  name: "Cogels-Osylei 78 Antwerpen",
-  lat: 51.2020336,
-  lng: 4.4336004,
-  keywords: ["cogels", "osylei", "gevel", "huizen", "architectuur"],
-
-  image: "images/ghielens.png",
-  description: "Kunst aan de gevel."   
-}
-];
-    // FUZZY SEARCH SETUP (Fuse.js)
-const fuse = new Fuse(places, {
-  keys: ["name", "keywords"],// search inside these fields
-  threshold: 0.6,// higher = more forgiving
-  minMatchCharLength: 2// ignore super short queries
-});
-    // 1. Create the map
-     const map = L.map('map').setView([51.2194, 4.4025], 13); 
-    // (antwerpss coordinates)
-map.on("click", () => {
-  clearDetails();
-});
-    // 2. load map tiles (OpenStreetMap)
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(map);
-
-    // DOM ELEMENTS (HTML access)
-  const sidebar = document.getElementById("sidebar");
-  const listContainer = document.getElementById("list");
-  const detailsContainer = document.getElementById("details");
-    
-function showDetails(place) {
-
-  // click same pin again → close
-  if (activePlace === place) {
-    clearDetails();
-    return;
-  }
-  activePlace = place;
-
-  map.setView([place.lat, place.lng], 17);
-
-  detailsContainer.innerHTML = `
-    <h3>${place.name}</h3>
-    <img src="${place.image}" width="100%">
-    <p>${place.description}</p>
-  `;
-}
-// keep track of markers so we can clear them when re-rendering
-  // FUNCTION: render list + markers
-  function renderPlaces(list) {
-    
-    // clear list
-    listContainer.innerHTML = "";
-
-    // remove existing markers from map
-    markers.forEach(m => map.removeLayer(m));
-    markers = [];
-
-    list.forEach(place => {
-      // create marker
-      const marker = L.marker([place.lat, place.lng]).addTo(map);
-      marker.on("click", () => {
-        showDetails(place);
-      });
-      marker.bindPopup(place.name);
-      markers.push(marker);
-
-      // list item
-      const item = document.createElement("div");
-      item.textContent = place.name;
-      item.style.padding = "8px";
-      item.style.cursor = "pointer";
-      item.style.borderBottom = "1px solid #ccc";
-      item.onclick = () => {
-        showDetails(place);
-      };
-
-      listContainer.appendChild(item);
-    });
-  }
-function clearDetails() {
-  detailsContainer.innerHTML = "";
-  activePlace = null;
-}
-    // SEARCH LOGIC
-const searchInput = document.getElementById("search");
-
-searchInput.addEventListener("input", () => {
-  const query = searchInput.value.trim();
-
-  if (query === "") {
-    clearDetails();
-    renderPlaces(places);
-    return;
-  }
-
-  const result = fuse.search(query);
-  const filtered = result.map(r => r.item);
-
-  clearDetails();
-  renderPlaces(filtered);
-
-});
-function updateUI() {
-  document.getElementById("loginBtn").style.display = adminMode ? "none" : "inline-block";
-  document.getElementById("logoutBtn").style.display = adminMode ? "inline-block" : "none";
-  document.getElementById("addBtn").style.display = adminMode ? "inline-block" : "none";
-}
-    // INITIAL LOAD
-renderPlaces(places);
-
-function login() {
-  const pw = prompt("Wachtwoord:");
-
-  if (pw === "1234") {
-    adminMode = true;
-
-    document.getElementById("loginBtn").style.display = "none";
-    document.getElementById("logoutBtn").style.display = "inline-block";
-    document.getElementById("addBtn").style.display = "inline-block";
-
-    alert("Admin mode enabled");
-  } else {
-    alert("Fout wachtwoord");
-  }
-}
-
-function logout() {
-  adminMode = false;
-
-  document.getElementById("loginBtn").style.display = "inline-block";
-  document.getElementById("logoutBtn").style.display = "none";
-  document.getElementById("addBtn").style.display = "none";
-
-  alert("Uitgelogd");
-}
-
-document.getElementById("addBtn").onclick = () => {
-  if (!adminMode) return;
-
-  const name = prompt("Naam?");
-  const lat = Number(prompt("Latitude?"));
-  const lng = Number(prompt("Longitude?"));
-  const desc = prompt("Beschrijving?");
-  const img = prompt("Image path?");
-  const keywordsInput = prompt("Keywords (komma gescheiden)");
-
-  const newPlace = {
-    name,
-    lat,
-    lng,
-    description: desc,
-    image: img,
-    keywords: keywordsInput
-      ? keywordsInput.split(",").map(k => k.trim())
-      : []
-  };
-
-  places.push(newPlace);
-
-  renderPlaces(places);
-};
-</script>
-
+<!-- YOUR JS FILE -->
+<script src="javascript.js"></script>
 </body>
 </html>
