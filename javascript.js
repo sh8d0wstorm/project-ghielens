@@ -24,6 +24,16 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
+map.on("click", function(e) {
+  if (!adminMode || !isAdding) return;
+
+  document.getElementById("m_lat").value = e.latlng.lat;
+  document.getElementById("m_lng").value = e.latlng.lng;
+
+  document.getElementById("addModal").style.display = "block";
+
+  isAdding = false;
+});
 // ===== UI ELEMENTS =====
 const listContainer = document.getElementById("list");
 const detailsContainer = document.getElementById("details");
@@ -64,6 +74,12 @@ function startAddLocation() {
   if (!adminMode) return;
 
   document.getElementById("addModal").style.display = "block";
+}
+function startMapPick() {
+  if (!adminMode) return;
+
+  isAdding = true;
+  alert("Click a location on the map.");
 }
 function confirmAdd() {
   const name = document.getElementById("m_name").value;
@@ -172,7 +188,17 @@ function updateUI() {
   }
 
   if (addBtn) addBtn.onclick = startAddLocation;
+  
+const pickMapBtn = document.getElementById("pickMapBtn");
+
+if (pickMapBtn) {
+  pickMapBtn.style.display =
+    adminMode ? "inline-block" : "none";
+
+  pickMapBtn.onclick = startMapPick;
 }
+}
+
 // ===== RENDER SYSTEM =====
 function renderPlaces(list) {
   listContainer.innerHTML = "";
