@@ -209,7 +209,7 @@ searchInput.addEventListener("input", () => {
 function login() {
   const pw = prompt("Wachtwoord:");
 
-  if (pw === "1234") {
+  if (pw === "ghielens1927") {
     adminMode = true;
     updateUI();
   }
