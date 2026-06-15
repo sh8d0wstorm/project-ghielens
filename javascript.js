@@ -316,7 +316,11 @@ function logout() {
           });
         });
 
-        fuse.setCollection(places);
+        if (!fuse) {
+  initFuse();
+} else {
+  fuse.setCollection(places);
+}
         renderPlaces(places);
       };
 
