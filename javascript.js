@@ -4,18 +4,51 @@ let activePlace = null;  // currently selected place
 let markers = [];        // leaflet markers on map
 let isAdding = false;    // future: add-mode state
 let editingPlace = null; // currently edited place
+let places = [];
+let fuse; // declare first
 // ===== DATA =====
-const places = [
-  { name: "Waterloostraat 11 Antwerpen", lat: 51.2033198, lng: 4.4314819, keywords: ["snijwerk","hout"], image: "images/ghielens.png", description: "Snijwerk in hout." },
-  { name: "Cogels-Osylei 4 Antwerpen", lat: 51.2051725, lng: 4.4326872, keywords: ["kunst","gevel"], image: "images/ghielens.png", description: "Kunst aan de gevel." }
-];
+const firebaseConfig = {
+  apiKey: "AIzaSyDX-AIGkfhSEfBRDt-SRrJyVWRlmtxs7qE",
+  authDomain: "project-ghielens.firebaseapp.com",
+  projectId: "project-ghielens",
+  storageBucket: "project-ghielens.firebasestorage.app",
+  messagingSenderId: "720120279485",
+  appId: "1:720120279485:web:96b0791f6206dad21ea2d4"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
-// ===== SEARCH =====
-const fuse = new Fuse(places, {
-  keys: ["name", "keywords"],
-  threshold: 0.6,
-  minMatchCharLength: 2
-});
+function initFuse() {
+  fuse = new Fuse(places, {
+    keys: ["name", "keywords"],
+    threshold: 0.6,
+    minMatchCharLength: 2
+  });
+}
+
+function parseCoord(value) {
+  if (value === null || value === undefined) return null;
+
+  const cleaned = String(value)
+    .replace(",", ".")
+    .replace(/[^0-9.-]/g, ""); // removes weird Excel junk
+
+  const num = Number(cleaned);
+
+  return isNaN(num) ? null : num;
+}
+
+function loadPlaces() {
+  db.collection("places").get().then(snapshot => {
+    places = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+console.log("Loading places...");
+    initFuse();          // 🔥 rebuild search index
+    renderPlaces(places);
+  });
+}
 
 // ===== MAP =====
 const map = L.map('map').setView([51.2194, 4.4025], 13);
@@ -72,7 +105,8 @@ function showDetails(place) {
 // ===== ADD LOCATION =====
 function startAddLocation() {
   if (!adminMode) return;
-
+  const lat = parseCoord(document.getElementById("m_lat").value);
+  const lng = parseCoord(document.getElementById("m_lng").value);
   document.getElementById("addModal").style.display = "block";
 }
 function startMapPick() {
@@ -101,12 +135,12 @@ function confirmAdd() {
       .filter(k => k !== "")
   };
 
-  places.push(newPlace);
+  db.collection("places").add(newPlace).then(() => {
+  loadPlaces();
+});
 
-  fuse.setCollection(places);
-  renderPlaces(places);
+closeAddModal();
 
-  closeAddModal();
 }
 
 function closeAddModal() {
@@ -127,15 +161,16 @@ function editLocation(place) {
   document.getElementById("e_desc").value = place.description;
   document.getElementById("e_img").value = place.image;
   document.getElementById("e_keywords").value = place.keywords.join(",");
-
   document.getElementById("editModal").style.display = "block";
+  editingPlace.lat = parseCoord(document.getElementById("e_lat").value);
+  editingPlace.lng = parseCoord(document.getElementById("e_lng").value);
 }
 function confirmEdit() {
   if (!editingPlace) return;
 
   editingPlace.name = document.getElementById("e_name").value;
-  editingPlace.lat = Number(document.getElementById("e_lat").value);
-  editingPlace.lng = Number(document.getElementById("e_lng").value);
+  editingPlace.lat = parseCoord(document.getElementById("e_lat").value);
+  editingPlace.lng = parseCoord(document.getElementById("e_lng").value);
   editingPlace.description = document.getElementById("e_desc").value;
   editingPlace.image = document.getElementById("e_img").value;
 
@@ -146,40 +181,39 @@ function confirmEdit() {
     .map(k => k.trim())
     .filter(k => k !== "");
 
-  fuse.setCollection(places);
-  renderPlaces(places);
-  showDetails(editingPlace);
+  db.collection("places").doc(editingPlace.id).update({
+    name: editingPlace.name,
+    lat: editingPlace.lat,
+    lng: editingPlace.lng,
+    description: editingPlace.description,
+    image: editingPlace.image,
+    keywords: editingPlace.keywords
+  }).then(() => {
+    loadPlaces();
+  });
 
   closeEditModal();
-  editingPlace = null;
 }
 function closeEditModal() {
   document.getElementById("editModal").style.display = "none";
 }
 function deleteLocation(place) {
-  const confirmed = confirm(`Delete "${place.name}"?`);
-  if (!confirmed) return;
-
-  const index = places.indexOf(place);
-  if (index > -1) {
-    places.splice(index, 1);
-    fuse.setCollection(places);
-    clearDetails();
-    renderPlaces(places);
-  }
+  db.collection("places").doc(place.id).delete().then(() => {
+    loadPlaces();
+  });
 }
 
 function updateUI() {
   const addBtn = document.getElementById("addBtn");
   const excelFile = document.getElementById("excelFile");
   const modal = document.getElementById("addModal");
+  const loginForm = document.getElementById("loginForm");
+  const passwordInput = document.getElementById("password");
 
   if (addBtn) addBtn.style.display = adminMode ? "inline-block" : "none";
   if (excelFile) excelFile.style.display = adminMode ? "block" : "none";
 
-  document.getElementById("loginBtn").style.display =
-    adminMode ? "none" : "inline-block";
-
+  if (loginForm) loginForm.style.display = adminMode ? "none" : "block";
   document.getElementById("logoutBtn").style.display =
     adminMode ? "inline-block" : "none";
 
@@ -187,19 +221,22 @@ function updateUI() {
     modal.style.display = "none"; // 🔥 prevents stuck modal
   }
 
+  if (passwordInput && !adminMode) {
+    passwordInput.value = "";
+  }
+
   if (addBtn) addBtn.onclick = startAddLocation;
   
-const pickMapBtn = document.getElementById("pickMapBtn");
+  const pickMapBtn = document.getElementById("pickMapBtn");
 
-if (pickMapBtn) {
-  pickMapBtn.style.display =
-    adminMode ? "inline-block" : "none";
+  if (pickMapBtn) {
+    pickMapBtn.style.display =
+      adminMode ? "inline-block" : "none";
 
-  pickMapBtn.onclick = startMapPick;
+    pickMapBtn.onclick = startMapPick;
+  }
 }
-}
 
-// ===== RENDER SYSTEM =====
 function renderPlaces(list) {
   listContainer.innerHTML = "";
 
@@ -207,17 +244,20 @@ function renderPlaces(list) {
   markers = [];
 
   list.forEach(place => {
+    if (place.lat == null || place.lng == null) {
+      console.warn("Skipping bad place:", place);
+      return;
+    }
+
     const marker = L.marker([place.lat, place.lng]).addTo(map);
-    
+    markers.push(marker);
     marker.on("click", () => showDetails(place));
 
-    markers.push(marker);
-
-    const item = document.createElement("div");
-    item.textContent = place.name;
-    item.onclick = () => showDetails(place);
-
-    listContainer.appendChild(item);
+    const listItem = document.createElement("div");
+    listItem.className = "list-item";
+    listItem.textContent = place.name;
+    listItem.onclick = () => showDetails(place);
+    listContainer.appendChild(listItem);
   });
 }
 
@@ -233,7 +273,7 @@ searchInput.addEventListener("input", () => {
 
 // ===== LOGIN SYSTEM =====
 function login() {
-  const pw = prompt("Wachtwoord:");
+  const pw = document.getElementById("password").value;
 
   if (pw === "ghielens1927") {
     adminMode = true;
@@ -268,8 +308,8 @@ function logout() {
         json.forEach(row => {
           places.push({
             name: row.name,
-            lat: Number(row.lat),
-            lng: Number(row.lng),
+            lat: parseCoord(row.lat),
+            lng: parseCoord(row.lng),
             description: row.description || "",
             keywords: row.keywords ? row.keywords.split(",") : [],
             image: row.image || ""
@@ -286,7 +326,7 @@ function logout() {
 });
  
 // ===== INIT =====
-renderPlaces(places);
+loadPlaces();
 updateUI();
 
 setTimeout(() => {

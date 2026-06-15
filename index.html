@@ -60,7 +60,7 @@
         <input id="e_desc" placeholder="Description">
         <input id="e_img" placeholder="Image URL">
         <input id="e_keywords" placeholder="Keywords (comma)">
-
+     
         <button onclick="confirmEdit()">Save</button>
         <button onclick="closeEditModal()">Cancel</button>
       </div>
@@ -71,16 +71,19 @@
       <input id="search" placeholder="Zoek een plek...">
 
       <!-- =========================
-           🔐 AUTH BUTTONS
+           🔐 AUTH FORM
       ========================== -->
+      <div id="loginForm">
+        <input type="password" id="password" placeholder="Wachtwoord" />
+        <button id="loginBtn" type="button" onclick="login()">Login</button>
+      </div>
       <button id="logoutBtn" onclick="logout()" style="display:none;">Logout</button>
-      <button id="loginBtn" onclick="login()">Login</button>
 
       <!-- =========================
            ➕ ADD BUTTON (admin only)
       ========================== -->
       <button id="addBtn">Add location</button>
-
+     <button id="pickMapBtn">Pick On Map</button>
       <!-- =========================
            📍 PLACE LIST + DETAILS
       ========================== -->
@@ -106,6 +109,8 @@
   <!-- Fuse.js fuzzy search -->
   <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2"></script>
 
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <!-- Your app logic -->
   <script src="javascript.js"></script>
 
