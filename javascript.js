@@ -37,16 +37,29 @@ function parseCoord(value) {
 
   return isNaN(num) ? null : num;
 }
-
 function loadPlaces() {
+  console.log("Loading places...");
+
   db.collection("places").get().then(snapshot => {
-    places = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-console.log("Loading places...");
-    initFuse();          // 🔥 rebuild search index
+    console.log("Snapshot size:", snapshot.size);
+
+    places = snapshot.docs.map(doc => {
+  const data = doc.data();
+
+  return {
+    id: doc.id,
+    name: data.name,
+    lat: parseCoord(data.lat),
+    lng: parseCoord(data.lng),
+    description: data.description || "",
+    image: data.image || "",
+    keywords: data.keywords || []
+  };
+});
+    initFuse();        // IMPORTANT
     renderPlaces(places);
+  }).catch(err => {
+    console.error("Firebase error:", err);
   });
 }
 
@@ -75,23 +88,37 @@ const searchInput = document.getElementById("search");
 // ===== FUNCTIONS =====
 // ===== PLACE DISPLAY =====
 function showDetails(place) {
+  console.log("showDetails called:", place);
+
   if (activePlace === place) {
     clearDetails();
     return;
   }
 
   activePlace = place;
+  console.log("before map");
+
   map.setView([place.lat, place.lng], 17);
-
+console.log(place);
+console.log(place.lat, place.lng);
+console.log("before innerHTML");
+if (place.lat == null || place.lng == null) {
+    console.log("No coordinates:", place);
+    return;
+}
   detailsContainer.innerHTML = `
-  <h3>${place.name}</h3>
-  <img src="${place.image}" width="100%">
-  <p>${place.description}</p>
+    <h3>${place.name}</h3>
+    <img src="${place.image}" width="100%">
+    <p>${place.description}</p>
+    ${adminMode ? '<button id="editBtn">Edit</button>' : ''}
+    ${adminMode ? '<button id="deleteBtn">Delete</button>' : ''}
+  `;
 
-  ${adminMode ? '<button id="editBtn">Edit</button>' : ''}
-  ${adminMode ? '<button id="deleteBtn">Delete</button>' : ''}
-`;
+  console.log("after innerHTML");
+
   if (adminMode) {
+    console.log("adding buttons");
+
     document.getElementById("editBtn").addEventListener("click", () => {
       editLocation(place);
     });
@@ -101,7 +128,6 @@ function showDetails(place) {
     });
   }
 }
-
 // ===== ADD LOCATION =====
 function startAddLocation() {
   if (!adminMode) return;
@@ -243,22 +269,27 @@ function renderPlaces(list) {
   markers.forEach(m => map.removeLayer(m));
   markers = [];
 
-  list.forEach(place => {
-    if (place.lat == null || place.lng == null) {
-      console.warn("Skipping bad place:", place);
-      return;
-    }
+  
 
-    const marker = L.marker([place.lat, place.lng]).addTo(map);
-    markers.push(marker);
-    marker.on("click", () => showDetails(place));
+   list.forEach(place => {
 
-    const listItem = document.createElement("div");
-    listItem.className = "list-item";
-    listItem.textContent = place.name;
-    listItem.onclick = () => showDetails(place);
-    listContainer.appendChild(listItem);
-  });
+  // Add to list first
+  const item = document.createElement("div");
+  item.textContent = place.name;
+  item.onclick = () => showDetails(place);
+  listContainer.appendChild(item);
+
+  // Only skip marker creation
+  if (place.lat == null || place.lng == null) {
+    console.warn("No coordinates yet:", place.name);
+    return;
+  }
+
+  const marker = L.marker([place.lat, place.lng]).addTo(map);
+  marker.on("click", () => showDetails(place));
+
+  markers.push(marker);
+});
 }
 
 // ===== SEARCH =====
