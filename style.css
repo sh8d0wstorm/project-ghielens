@@ -25,3 +25,10 @@
   flex: 1;
   height: 100vh; /* 🔥 THIS is the missing piece */
 }
+#list {
+  display: block;
+}
+
+#details {
+  display: block;
+}

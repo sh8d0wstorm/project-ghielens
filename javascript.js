@@ -17,26 +17,38 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-
+console.log(firebase.app().options.projectId);
 function initFuse() {
   fuse = new Fuse(places, {
-    keys: ["name", "keywords"],
-    threshold: 0.6,
+    keys: ["name", "keyword"],
+    threshold: 0.4,
     minMatchCharLength: 2
   });
 }
 
 function parseCoord(value) {
   if (value === null || value === undefined) return null;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
 
   const cleaned = String(value)
+    .trim()
     .replace(",", ".")
     .replace(/[^0-9.-]/g, ""); // removes weird Excel junk
 
   const num = Number(cleaned);
 
-  return isNaN(num) ? null : num;
+  return Number.isFinite(num) ? num : null;
 }
+
+function getCoordinates(data) {
+  const lat = parseCoord(data?.lat ?? data?.latitude ?? data?.y);
+  const ing = parseCoord(data?.ing ?? data?.Ing ?? data?.lng ?? data?.lon ?? data?.longitude ?? data?.long ?? data?.x);
+
+  return { lat, ing };
+}
+
 function loadPlaces() {
   console.log("Loading places...");
 
@@ -44,19 +56,21 @@ function loadPlaces() {
     console.log("Snapshot size:", snapshot.size);
 
     places = snapshot.docs.map(doc => {
-  const data = doc.data();
+      const data = doc.data();
+      const { lat, ing } = getCoordinates(data);
 
-  return {
-    id: doc.id,
-    name: data.name,
-    lat: parseCoord(data.lat),
-    lng: parseCoord(data.lng),
-    description: data.description || "",
-    image: data.image || "",
-    keywords: data.keywords || []
-  };
-});
-    initFuse();        // IMPORTANT
+      return {
+        id: doc.id,
+        name: data.name || "Untitled",
+        lat,
+        ing,
+        description: data.description || "",
+        image: data.image || "",
+        keyword: data.keyword || data.keywords || []
+      };
+    });
+
+    initFuse();
     renderPlaces(places);
   }).catch(err => {
     console.error("Firebase error:", err);
@@ -74,7 +88,7 @@ map.on("click", function(e) {
   if (!adminMode || !isAdding) return;
 
   document.getElementById("m_lat").value = e.latlng.lat;
-  document.getElementById("m_lng").value = e.latlng.lng;
+  document.getElementById("m_ing").value = e.latlng.lng;
 
   document.getElementById("addModal").style.display = "block";
 
@@ -88,37 +102,28 @@ const searchInput = document.getElementById("search");
 // ===== FUNCTIONS =====
 // ===== PLACE DISPLAY =====
 function showDetails(place) {
-  console.log("showDetails called:", place);
-
   if (activePlace === place) {
     clearDetails();
     return;
   }
 
   activePlace = place;
-  console.log("before map");
 
-  map.setView([place.lat, place.lng], 17);
-console.log(place);
-console.log(place.lat, place.lng);
-console.log("before innerHTML");
-if (place.lat == null || place.lng == null) {
-    console.log("No coordinates:", place);
-    return;
-}
+  // Only center map if coordinates exist
+  if (place.lat != null && place.ing != null) {
+    map.setView([place.lat, place.ing], 17);
+  }
+
   detailsContainer.innerHTML = `
     <h3>${place.name}</h3>
     <img src="${place.image}" width="100%">
     <p>${place.description}</p>
+
     ${adminMode ? '<button id="editBtn">Edit</button>' : ''}
     ${adminMode ? '<button id="deleteBtn">Delete</button>' : ''}
   `;
 
-  console.log("after innerHTML");
-
   if (adminMode) {
-    console.log("adding buttons");
-
     document.getElementById("editBtn").addEventListener("click", () => {
       editLocation(place);
     });
@@ -132,7 +137,7 @@ if (place.lat == null || place.lng == null) {
 function startAddLocation() {
   if (!adminMode) return;
   const lat = parseCoord(document.getElementById("m_lat").value);
-  const lng = parseCoord(document.getElementById("m_lng").value);
+  const ing = parseCoord(document.getElementById("m_ing").value);
   document.getElementById("addModal").style.display = "block";
 }
 function startMapPick() {
@@ -144,25 +149,29 @@ function startMapPick() {
 function confirmAdd() {
   const name = document.getElementById("m_name").value;
   const lat = Number(document.getElementById("m_lat").value);
-  const lng = Number(document.getElementById("m_lng").value);
+  const ing = Number(document.getElementById("m_ing").value);
   const desc = document.getElementById("m_desc").value;
   const img = document.getElementById("m_img").value;
-  const keywordsInput = document.getElementById("m_keywords").value;
+  const keywordInput = document.getElementById("m_keywords").value;
 
   const newPlace = {
     name,
     lat,
-    lng,
+    ing,
     description: desc,
     image: img,
-    keywords: keywordsInput
+    keyword: keywordInput
       .split(",")
       .map(k => k.trim())
       .filter(k => k !== "")
   };
 
-  db.collection("places").add(newPlace).then(() => {
-  loadPlaces();
+ db.collection("places").add(newPlace).then(docRef => {
+  newPlace.id = docRef.id;
+
+  places.push(newPlace);
+  fuse.setCollection(places);
+  renderPlaces(places);
 });
 
 closeAddModal();
@@ -182,25 +191,26 @@ function editLocation(place) {
   editingPlace = place;
 
   document.getElementById("e_name").value = place.name;
-  document.getElementById("e_lat").value = place.lat;
-  document.getElementById("e_lng").value = place.lng;
+  document.getElementById("e_lat").value = place.lat ?? "";
+  document.getElementById("e_ing").value = place.ing ?? "";
   document.getElementById("e_desc").value = place.description;
   document.getElementById("e_img").value = place.image;
-  document.getElementById("e_keywords").value = place.keywords.join(",");
+  document.getElementById("e_keywords").value = (place.keyword || []).join(",");
   document.getElementById("editModal").style.display = "block";
+
   editingPlace.lat = parseCoord(document.getElementById("e_lat").value);
-  editingPlace.lng = parseCoord(document.getElementById("e_lng").value);
+  editingPlace.ing = parseCoord(document.getElementById("e_ing").value);
 }
 function confirmEdit() {
   if (!editingPlace) return;
 
   editingPlace.name = document.getElementById("e_name").value;
   editingPlace.lat = parseCoord(document.getElementById("e_lat").value);
-  editingPlace.lng = parseCoord(document.getElementById("e_lng").value);
+  editingPlace.ing = parseCoord(document.getElementById("e_ing").value);
   editingPlace.description = document.getElementById("e_desc").value;
   editingPlace.image = document.getElementById("e_img").value;
 
-  editingPlace.keywords = document
+  editingPlace.keyword = document
     .getElementById("e_keywords")
     .value
     .split(",")
@@ -210,10 +220,10 @@ function confirmEdit() {
   db.collection("places").doc(editingPlace.id).update({
     name: editingPlace.name,
     lat: editingPlace.lat,
-    lng: editingPlace.lng,
+    ing: editingPlace.ing,
     description: editingPlace.description,
     image: editingPlace.image,
-    keywords: editingPlace.keywords
+    keyword: editingPlace.keyword
   }).then(() => {
     loadPlaces();
   });
@@ -269,27 +279,28 @@ function renderPlaces(list) {
   markers.forEach(m => map.removeLayer(m));
   markers = [];
 
-  
+  list.forEach(place => {
 
-   list.forEach(place => {
+    // Add to list first
+    const item = document.createElement("div");
+    item.textContent = place.name;
+    item.onclick = () => showDetails(place);
+    listContainer.appendChild(item);
 
-  // Add to list first
-  const item = document.createElement("div");
-  item.textContent = place.name;
-  item.onclick = () => showDetails(place);
-  listContainer.appendChild(item);
+    // Only skip marker creation if coordinates are missing
+    const lat = parseCoord(place.lat);
+    const ing = parseCoord(place.ing);
 
-  // Only skip marker creation
-  if (place.lat == null || place.lng == null) {
-    console.warn("No coordinates yet:", place.name);
-    return;
-  }
+    if (Number.isNaN(lat) || Number.isNaN(ing)) {
+  console.warn("No coordinates yet:", place.name);
+  return;
+}
 
-  const marker = L.marker([place.lat, place.lng]).addTo(map);
-  marker.on("click", () => showDetails(place));
+    const marker = L.marker([lat, ing]).addTo(map);
+    marker.on("click", () => showDetails(place));
 
-  markers.push(marker);
-});
+    markers.push(marker);
+  });
 }
 
 // ===== SEARCH =====
@@ -297,11 +308,13 @@ searchInput.addEventListener("input", () => {
   const query = searchInput.value.trim();
 
   if (!query) return renderPlaces(places);
+  if (!fuse) {
+    initFuse();
+  }
 
   const result = fuse.search(query);
   renderPlaces(result.map(r => r.item));
 });
-
 // ===== LOGIN SYSTEM =====
 function login() {
   const pw = document.getElementById("password").value;
@@ -340,9 +353,9 @@ function logout() {
           places.push({
             name: row.name,
             lat: parseCoord(row.lat),
-            lng: parseCoord(row.lng),
+            ing: parseCoord(row.ing ?? row.Ing),
             description: row.description || "",
-            keywords: row.keywords ? row.keywords.split(",") : [],
+            keyword: row.keyword ? row.keyword.split(",") : (row.keywords ? row.keywords.split(",") : []),
             image: row.image || ""
           });
         });
