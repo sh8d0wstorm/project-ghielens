@@ -21,10 +21,34 @@
   margin-bottom: 10px;
   box-sizing: border-box;
 }   /* MAP AREA (takes remaining space) */
-#map {
-  flex: 1;
-  height: 100vh; /* 🔥 THIS is the missing piece */
-}
+  /* Clean up default text styles and padding */
+  body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    background-color: #f9f9f9;
+  }
+
+  /* Status updater styling */
+  #status {
+    font-weight: bold;
+    color: #555;
+    margin-top: 15px;
+    margin-bottom: 15px;
+  }
+
+  /* IMPORTANT: Leaflet maps require an explicit layout height or they stay invisible */
+  #map {
+    height: 500px;
+    width: 100%;
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  }
+
+  /* Small responsive tweak */
+  @media (max-width: 480px) {
+    #map { height: 320px; }
+  }
 #list {
   display: block;
 }
@@ -32,3 +56,31 @@
 #details {
   display: block;
 }
+
+/* Additional UI helper styles (appended, do not remove existing rules) */
+/* File input spacing */
+#excel-file {
+  display: block;
+  margin-top: 12px;
+}
+
+/* Simple reset/clear button style (if you add a reset button later) */
+#resetBtn {
+  display: inline-block;
+  padding: 8px 12px;
+  margin-left: 8px;
+  background: #007bff;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+#resetBtn:hover {
+  filter: brightness(0.95);
+}
+
+/* Small utility classes */
+.hidden { display: none !important; }
+.muted { color: #777; }

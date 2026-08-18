@@ -20,10 +20,18 @@ const db = firebase.firestore();
 console.log(firebase.app().options.projectId);
 function initFuse() {
   fuse = new Fuse(places, {
-    keys: ["name", "keyword"],
+    keys: ["name", "keyword", "latString", "ingString"],
     threshold: 0.4,
     minMatchCharLength: 2
   });
+}
+
+function normalizePlaceCoordinates(place) {
+  place.lat = parseCoord(place.lat);
+  place.ing = parseCoord(place.ing);
+  place.latString = place.lat != null ? String(place.lat) : "";
+  place.ingString = place.ing != null ? String(place.ing) : "";
+  return place;
 }
 
 function parseCoord(value) {
@@ -43,23 +51,88 @@ function parseCoord(value) {
 }
 
 function getCoordinates(data) {
-  const lat = parseCoord(data?.lat ?? data?.latitude ?? data?.y);
-  const ing = parseCoord(data?.ing ?? data?.Ing ?? data?.lng ?? data?.lon ?? data?.longitude ?? data?.long ?? data?.x);
+  const lat = parseCoord(
+    data?.lat ?? data?.Lat ?? data?.latitude ?? data?.Latitude ?? data?.y ?? data?.Y
+  );
+  const ing = parseCoord(
+    data?.ing ?? data?.Ing ?? data?.lng ?? data?.Lng ?? data?.lon ?? data?.Lon ??
+      data?.longitude ?? data?.Longitude ?? data?.long ?? data?.Long ?? data?.x ?? data?.X
+  );
 
   return { lat, ing };
 }
 
+function parseLatLngFromString(value) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  const match = text.match(/(-?\d+(?:[.,]\d+)?)\s*[,;/]\s*(-?\d+(?:[.,]\d+)?)/)
+    || text.match(/(-?\d+(?:[.,]\d+)?)\s+(-?\d+(?:[.,]\d+)?)/);
+  return match ? { lat: match[1], ing: match[2] } : null;
+}
+
+function extractLatLngFromRow(row) {
+  const lat = row?.lat ?? row?.Lat ?? row?.latitude ?? row?.Latitude ?? row?.y ?? row?.Y;
+  const ing = row?.ing ?? row?.Ing ?? row?.lng ?? row?.Lng ?? row?.lon ?? row?.Lon ??
+    row?.longitude ?? row?.Longitude ?? row?.long ?? row?.Long ?? row?.x ?? row?.X;
+
+  if (lat != null && ing != null) {
+    return { lat, ing };
+  }
+
+  const combined = row?.coordinates ?? row?.Coordinates ?? row?.coordinate ?? row?.Coordinate ??
+    row?.latlng ?? row?.LatLng ?? row?.["Lat/Lng"] ?? row?.location ?? row?.Location ??
+    row?.geo ?? row?.Geo ?? row?.coords ?? row?.Coords;
+
+  const parsed = parseLatLngFromString(combined);
+  if (parsed) {
+    return parsed;
+  }
+
+  for (const key in row) {
+    if (typeof row[key] === "string") {
+      const parsedField = parseLatLngFromString(row[key]);
+      if (parsedField) {
+        return parsedField;
+      }
+    }
+  }
+
+  return { lat: null, ing: null };
+}
+
 function loadPlaces() {
   console.log("Loading places...");
+  console.log("🔥 loadPlaces() CALLED");
+  // FIX: Collection changed from "locations" to "places" to match your add/edit methods
+  db.collection("places").onSnapshot((snapshot) => {
+    console.log("Snapshot size:", snapshot ? snapshot.size : 0);
 
-  db.collection("places").get().then(snapshot => {
-    console.log("Snapshot size:", snapshot.size);
+      if (!snapshot || snapshot.size === 0) {
+        console.warn("No documents found in Firebase path! Check your collection name.");
+        initFuse();
+        renderPlaces(places);
+        return;
+      }
 
-    places = snapshot.docs.map(doc => {
+      // Clear old markers only when we have new snapshot data
+      markers.forEach(marker => map.removeLayer(marker));
+      markers = [];
+
+      // Build firebasePlaces from snapshot
+      const firebasePlaces = snapshot.docs.map(doc => {
       const data = doc.data();
+      
+      // Pull coordinates using your custom structural fallback function
       const { lat, ing } = getCoordinates(data);
 
-      return {
+      console.log("Firebase doc coordinates:", {
+        id: doc.id,
+        raw: data,
+        lat,
+        ing
+      });
+
+      const place = normalizePlaceCoordinates({
         id: doc.id,
         name: data.name || "Untitled",
         lat,
@@ -67,13 +140,45 @@ function loadPlaces() {
         description: data.description || "",
         image: data.image || "",
         keyword: data.keyword || data.keywords || []
-      };
+      });
+
+      // Render Leaflet marker safely if coordinate data evaluates successfully
+      if (place.lat !== null && place.ing !== null) {
+          // Leaflet expects [latitude, longitude]
+          const marker = L.marker([place.lat, place.ing])
+              .addTo(map)
+              .bindPopup(`<b>${place.name}</b>`);
+          
+          // Store reference so markers can be cleared on dynamic live-reload updates
+          markers.push(marker);
+      } else {
+          console.warn(`Place ID ${doc.id} skipped: Invalid coordinates`, data);
+      }
+
+      return place;
     });
 
-    initFuse();
+    // Merge firebasePlaces into existing `places` (which may contain Excel imports)
+    firebasePlaces.forEach(fp => {
+      if (fp.id) {
+        const existingIndex = places.findIndex(p => p.id === fp.id);
+        if (existingIndex !== -1) {
+          // Replace existing Firebase entry with latest
+          places[existingIndex] = fp;
+          return;
+        }
+      }
+
+      // No matching id found — append as new
+      places.push(fp);
+    });
+
+    console.log("Merged Firebase places. Total places:", places.length);
+
+    if (!fuse) initFuse(); else fuse.setCollection(places);
     renderPlaces(places);
-  }).catch(err => {
-    console.error("Firebase error:", err);
+  }, (err) => {
+    console.error("Firebase subscription error:", err);
   });
 }
 
@@ -136,8 +241,6 @@ function showDetails(place) {
 // ===== ADD LOCATION =====
 function startAddLocation() {
   if (!adminMode) return;
-  const lat = parseCoord(document.getElementById("m_lat").value);
-  const ing = parseCoord(document.getElementById("m_ing").value);
   document.getElementById("addModal").style.display = "block";
 }
 function startMapPick() {
@@ -148,13 +251,13 @@ function startMapPick() {
 }
 function confirmAdd() {
   const name = document.getElementById("m_name").value;
-  const lat = Number(document.getElementById("m_lat").value);
-  const ing = Number(document.getElementById("m_ing").value);
+  const lat = parseCoord(document.getElementById("m_lat").value);
+  const ing = parseCoord(document.getElementById("m_ing").value);
   const desc = document.getElementById("m_desc").value;
   const img = document.getElementById("m_img").value;
   const keywordInput = document.getElementById("m_keywords").value;
 
-  const newPlace = {
+  const newPlace = normalizePlaceCoordinates({
     name,
     lat,
     ing,
@@ -164,15 +267,28 @@ function confirmAdd() {
       .split(",")
       .map(k => k.trim())
       .filter(k => k !== "")
-  };
+  });
 
  db.collection("places").add(newPlace).then(docRef => {
+
   newPlace.id = docRef.id;
 
   places.push(newPlace);
-  fuse.setCollection(places);
+
+  if (!fuse) initFuse();
+  else fuse.setCollection(places);
+
   renderPlaces(places);
+
 });
+
+// clear add modal fields for next use
+document.getElementById("m_name").value = "";
+document.getElementById("m_lat").value = "";
+document.getElementById("m_ing").value = "";
+document.getElementById("m_desc").value = "";
+document.getElementById("m_img").value = "";
+document.getElementById("m_keywords").value = "";
 
 closeAddModal();
 
@@ -207,6 +323,8 @@ function confirmEdit() {
   editingPlace.name = document.getElementById("e_name").value;
   editingPlace.lat = parseCoord(document.getElementById("e_lat").value);
   editingPlace.ing = parseCoord(document.getElementById("e_ing").value);
+  editingPlace.latString = editingPlace.lat != null ? String(editingPlace.lat) : "";
+  editingPlace.ingString = editingPlace.ing != null ? String(editingPlace.ing) : "";
   editingPlace.description = document.getElementById("e_desc").value;
   editingPlace.image = document.getElementById("e_img").value;
 
@@ -274,6 +392,8 @@ function updateUI() {
 }
 
 function renderPlaces(list) {
+  console.log("🟢 renderPlaces called with:", Array.isArray(list) ? list.length : typeof list, "places");
+  console.log("📋 places currently contains:", places.length);
   listContainer.innerHTML = "";
 
   markers.forEach(m => map.removeLayer(m));
@@ -291,10 +411,15 @@ function renderPlaces(list) {
     const lat = parseCoord(place.lat);
     const ing = parseCoord(place.ing);
 
-    if (Number.isNaN(lat) || Number.isNaN(ing)) {
-  console.warn("No coordinates yet:", place.name);
-  return;
-}
+    if (!Number.isFinite(lat) || !Number.isFinite(ing)) {
+      console.warn("Skipping invalid marker coordinates:", place.name, {
+        lat: place.lat,
+        ing: place.ing,
+        parsedLat: lat,
+        parsedIng: ing
+      });
+      return;
+    }
 
     const marker = L.marker([lat, ing]).addTo(map);
     marker.on("click", () => showDetails(place));
@@ -304,16 +429,57 @@ function renderPlaces(list) {
 }
 
 // ===== SEARCH =====
-searchInput.addEventListener("input", () => {
-  const query = searchInput.value.trim();
+function searchPlaces(query) {
+  const text = query.trim();
+  if (!text) {
+    return renderPlaces(places);
+  }
 
-  if (!query) return renderPlaces(places);
+  const coordinateMatch = text.match(/^(-?\d+(?:[.,]\d+)?)\s*[ ,]\s*(-?\d+(?:[.,]\d+)?)$/);
+  if (coordinateMatch) {
+    const lat = parseCoord(coordinateMatch[1]);
+    const ing = parseCoord(coordinateMatch[2]);
+
+    if (lat != null && ing != null) {
+      const exactMatches = places.filter(place => {
+        const plat = parseCoord(place.lat);
+        const ping = parseCoord(place.ing);
+        return plat != null && ping != null && Math.abs(plat - lat) < 0.000001 && Math.abs(ping - ing) < 0.000001;
+      });
+
+      if (exactMatches.length) {
+        return renderPlaces(exactMatches);
+      }
+
+      let closest = null;
+      let minDistance = Infinity;
+      places.forEach(place => {
+        const plat = parseCoord(place.lat);
+        const ping = parseCoord(place.ing);
+        if (plat == null || ping == null) return;
+        const distance = (plat - lat) ** 2 + (ping - ing) ** 2;
+        if (distance < minDistance) {
+          minDistance = distance;
+          closest = place;
+        }
+      });
+
+      if (closest) {
+        return renderPlaces([closest]);
+      }
+    }
+  }
+
   if (!fuse) {
     initFuse();
   }
 
-  const result = fuse.search(query);
+  const result = fuse.search(text);
   renderPlaces(result.map(r => r.item));
+}
+
+searchInput.addEventListener("input", () => {
+  searchPlaces(searchInput.value);
 });
 // ===== LOGIN SYSTEM =====
 function login() {
@@ -330,7 +496,7 @@ function logout() {
   updateUI();
 }
 
-  window.addEventListener("load", () => {
+window.addEventListener("load", () => {
   const excelFileInput = document.getElementById("excelFile");
 
   if (excelFileInput) {
@@ -342,29 +508,65 @@ function logout() {
 
       const reader = new FileReader();
 
-      reader.onload = function (evt) {
+      reader.onload = async function (evt) {
         const data = new Uint8Array(evt.target.result);
         const workbook = XLSX.read(data, { type: "array" });
 
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const json = XLSX.utils.sheet_to_json(sheet);
 
-        json.forEach(row => {
-          places.push({
-            name: row.name,
-            lat: parseCoord(row.lat),
-            ing: parseCoord(row.ing ?? row.Ing),
-            description: row.description || "",
-            keyword: row.keyword ? row.keyword.split(",") : (row.keywords ? row.keywords.split(",") : []),
-            image: row.image || ""
-          });
-        });
+        // Import every Excel row
+        for (const row of json) {
+          let coordinates = extractLatLngFromRow(row);
 
+          // If Excel has no coordinates, geocode the address
+          if (coordinates.lat == null || coordinates.ing == null) {
+            const address = row.name || row.Name;
+
+            if (address) {
+              console.log("🌍 Geocoding:", address);
+
+              const geocoded = await geocodeAddress(address);
+
+              if (geocoded) {
+                coordinates = geocoded;
+              }
+            }
+          }
+
+          const place = normalizePlaceCoordinates({
+            name: row.name || row.Name || "Untitled",
+            lat: coordinates.lat,
+            ing: coordinates.ing,
+            description: row.description || row.Description || "",
+            keyword: row.keyword
+              ? row.keyword.split(",")
+              : (row.keywords ? row.keywords.split(",") : []),
+            image: row.image || row.Image || ""
+          });
+
+          console.log("Excel import place:", {
+            raw: row,
+            coordinates,
+            parsedLat: place.lat,
+            parsedIng: place.ing,
+            name: place.name
+          });
+
+          places.push(place);
+
+          // Small pause between Nominatim requests
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        // Update search
         if (!fuse) {
-  initFuse();
-} else {
-  fuse.setCollection(places);
-}
+          initFuse();
+        } else {
+          fuse.setCollection(places);
+        }
+
+        // Display locations
         renderPlaces(places);
       };
 
@@ -380,3 +582,47 @@ updateUI();
 setTimeout(() => {
   map.invalidateSize();
 }, 100);
+
+// ===== EXCEL GEOCODING IMPORT (moved from app.js into javascript.js)
+// Uses the existing `excelFile` input and the same Leaflet `map` instance.
+let excelMarkers = [];
+let excelBounds = L.latLngBounds();
+
+function clearExcelMarkers() {
+  excelMarkers.forEach(m => map.removeLayer(m));
+  excelMarkers = [];
+  excelBounds = L.latLngBounds();
+}
+
+async function geocodeAddress(address) {
+  const searchAddress = `${address}, Belgium`;
+  const encodedAddress = encodeURIComponent(searchAddress);
+
+  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodedAddress}&limit=1`;
+
+  try {
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`Geocoding request failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.length === 0) {
+      console.warn("No coordinates found for:", address);
+      return null;
+    }
+console.log("🗺️ Nominatim RAW:", data[0].lat, data[0].lon);
+console.log("🗺️ Nominatim PARSED:", parseFloat(data[0].lat), parseFloat(data[0].lon));
+
+    return {
+      lat: parseFloat(data[0].lat),
+      ing: parseFloat(data[0].lon)
+    };
+
+  } catch (error) {
+    console.error("Geocoding failed for:", address, error);
+    return null;
+  }
+}
