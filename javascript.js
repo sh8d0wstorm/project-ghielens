@@ -63,11 +63,32 @@ function getCoordinates(data) {
 }
 
 function parseLatLngFromString(value) {
+
   if (value === null || value === undefined) return null;
+
   const text = String(value).trim();
-  const match = text.match(/(-?\d+(?:[.,]\d+)?)\s*[,;/]\s*(-?\d+(?:[.,]\d+)?)/)
-    || text.match(/(-?\d+(?:[.,]\d+)?)\s+(-?\d+(?:[.,]\d+)?)/);
-  return match ? { lat: match[1], ing: match[2] } : null;
+
+  const match =
+    text.match(/(-?\d+(?:[.,]\d+)?)\s*[,;/]\s*(-?\d+(?:[.,]\d+)?)/)
+    ||
+    text.match(/(-?\d+(?:[.,]\d+)?)\s+(-?\d+(?:[.,]\d+)?)/);
+
+  if (!match) return null;
+
+  const lat = parseFloat(match[1].replace(",", "."));
+  const ing = parseFloat(match[2].replace(",", "."));
+
+  // Reject values that cannot realistically be Belgian coordinates.
+  // This prevents house numbers such as "4, 78" from being treated
+  // as latitude/longitude.
+  if (lat < 49 || lat > 52 || ing < 2 || ing > 7) {
+    return null;
+  }
+
+  return {
+    lat,
+    ing
+  };
 }
 
 function extractLatLngFromRow(row) {
@@ -145,12 +166,16 @@ function loadPlaces() {
       // Render Leaflet marker safely if coordinate data evaluates successfully
       if (place.lat !== null && place.ing !== null) {
           // Leaflet expects [latitude, longitude]
-          const marker = L.marker([place.lat, place.ing])
-              .addTo(map)
-              .bindPopup(`<b>${place.name}</b>`);
-          
-          // Store reference so markers can be cleared on dynamic live-reload updates
-          markers.push(marker);
+         const marker = L.marker([place.lat, place.ing])
+  .addTo(map);
+
+place.marker = marker;
+
+marker.on("click", () => {
+  showDetails(place);
+});
+
+markers.push(marker);
       } else {
           console.warn(`Place ID ${doc.id} skipped: Invalid coordinates`, data);
       }
@@ -205,35 +230,112 @@ const detailsContainer = document.getElementById("details");
 const searchInput = document.getElementById("search");
 
 // ===== FUNCTIONS =====
+function getImageForPlace(place) {
+  if (!place) return "";
+
+  const imageValue = place.image || place.img || "";
+
+  if (!imageValue) {
+    if (!place.name) return "";
+    const cleanName = String(place.name).trim();
+    return `images/${encodeURI(cleanName)}.jpg`;
+  }
+
+  if (/^(https?:)?\/\//i.test(imageValue) || imageValue.startsWith("data:")) {
+    return imageValue;
+  }
+
+  if (imageValue.startsWith("images/") || imageValue.startsWith("./") || imageValue.startsWith("/")) {
+    return imageValue;
+  }
+
+  return `images/${encodeURI(imageValue)}`;
+}
+
+console.log("getImageForPlace() function defined. Example image path:", getImageForPlace({ name: "ExamplePlace" }));
 // ===== PLACE DISPLAY =====
 function showDetails(place) {
   if (activePlace === place) {
-    clearDetails();
+    activePlace = null;
+
+    if (place.marker) {
+      place.marker.closePopup();
+    }
+
     return;
   }
 
   activePlace = place;
+  const imageUrl = getImageForPlace(place);
 
-  // Only center map if coordinates exist
-  if (place.lat != null && place.ing != null) {
-    map.setView([place.lat, place.ing], 17);
+  if (place.marker) {
+    // Keep the marker centered when opening details
+    if (place.lat != null && place.ing != null) {
+      map.setView([place.lat, place.ing], 17);
+    }
+
+    const popupContent = `
+      <div class="location-popup">
+        <h3>${place.name}</h3>
+
+        ${imageUrl ? `
+  <img src="${imageUrl}" class="popup-image" onerror="this.style.display='none'">
+` : ""}
+
+        <p>${place.description || ""}</p>
+
+        ${adminMode ? `
+          <button class="popup-edit-btn">Edit</button>
+          <button class="popup-delete-btn">Delete</button>
+        ` : ""}
+      </div>
+    `;
+
+    place.marker
+      .bindPopup(popupContent)
+      .openPopup();
+
+    place.marker.once("popupopen", () => {
+      const popup = place.marker.getPopup().getElement();
+
+      if (!popup) return;
+
+      const editBtn = popup.querySelector(".popup-edit-btn");
+      const deleteBtn = popup.querySelector(".popup-delete-btn");
+
+      if (editBtn) {
+        editBtn.addEventListener("click", () => {
+          editLocation(place);
+        });
+      }
+
+      if (deleteBtn) {
+        deleteBtn.addEventListener("click", () => {
+          deleteLocation(place);
+        });
+      }
+    });
   }
 
   detailsContainer.innerHTML = `
     <h3>${place.name}</h3>
-    <img src="${place.image}" width="100%">
-    <p>${place.description}</p>
+
+    ${imageUrl ? `
+<img src="${imageUrl}" width="100%" onerror="this.style.display='none'">
+    ` : ""}
+
+    <p>${place.description || ""}</p>
 
     ${adminMode ? '<button id="editBtn">Edit</button>' : ''}
     ${adminMode ? '<button id="deleteBtn">Delete</button>' : ''}
   `;
 
   if (adminMode) {
-    document.getElementById("editBtn").addEventListener("click", () => {
+    document.getElementById("editBtn")?.addEventListener("click", () => {
       editLocation(place);
     });
 
-    document.getElementById("deleteBtn").addEventListener("click", () => {
+    document.getElementById("deleteBtn")?.addEventListener("click", () => {
       deleteLocation(place);
     });
   }
@@ -422,6 +524,7 @@ function renderPlaces(list) {
     }
 
     const marker = L.marker([lat, ing]).addTo(map);
+    place.marker = marker;
     marker.on("click", () => showDetails(place));
 
     markers.push(marker);
@@ -484,10 +587,14 @@ searchInput.addEventListener("input", () => {
 // ===== LOGIN SYSTEM =====
 function login() {
   const pw = document.getElementById("password").value;
+  console.log("login() called, password entered:", pw);
 
   if (pw === "ghielens1927") {
+    console.log("login successful");
     adminMode = true;
     updateUI();
+  } else {
+    console.log("login failed: incorrect password");
   }
 }
 
@@ -595,11 +702,10 @@ function clearExcelMarkers() {
 }
 
 async function geocodeAddress(address) {
-  const searchAddress = `${address}, Belgium`;
+  const searchAddress = address;
   const encodedAddress = encodeURIComponent(searchAddress);
 
-  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodedAddress}&limit=1`;
-
+  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodedAddress}&countrycodes=be&limit=1`;
   try {
     const response = await fetch(url);
 
@@ -625,4 +731,17 @@ console.log("🗺️ Nominatim PARSED:", parseFloat(data[0].lat), parseFloat(dat
     console.error("Geocoding failed for:", address, error);
     return null;
   }
+}
+// After getting Nominatim results, validate the city matches
+function validateGeocodeResult(results, expectedCity) {
+  // Try to find a result where display_name contains the expected city
+  const match = results.find(r => 
+    r.display_name.toLowerCase().includes(expectedCity.toLowerCase())
+  );
+  
+  if (match) return match;
+  
+  // If no match, try with postal code or bounded search
+  // (fallback strategy)
+  return null;
 }
