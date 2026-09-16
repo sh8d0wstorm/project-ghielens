@@ -183,22 +183,10 @@ markers.push(marker);
       return place;
     });
 
-    // Merge firebasePlaces into existing `places` (which may contain Excel imports)
-    firebasePlaces.forEach(fp => {
-      if (fp.id) {
-        const existingIndex = places.findIndex(p => p.id === fp.id);
-        if (existingIndex !== -1) {
-          // Replace existing Firebase entry with latest
-          places[existingIndex] = fp;
-          return;
-        }
-      }
+    // Replace places completely with Firebase data (no duplicates)
+    places = firebasePlaces;
 
-      // No matching id found — append as new
-      places.push(fp);
-    });
-
-    console.log("Merged Firebase places. Total places:", places.length);
+    console.log("✅ Loaded from Firebase. Total places:", places.length, places.map(p => p.name));
 
     if (!fuse) initFuse(); else fuse.setCollection(places);
     renderPlaces(places);
@@ -810,14 +798,16 @@ window.addEventListener("load", () => {
             place.id = docRef.id;
             console.log("✅ Saved to Firebase:", place.name, "ID:", place.id);
           } catch (error) {
-            console.error("❌ Failed to save to Firebase:", error);
+            console.error("❌ Failed to save to Firebase:", place.name, error);
+            alert("❌ Error saving to Firebase: " + error.message);
+            return; // Stop importing if Firebase fails
           }
-
-          places.push(place);
 
           // Small pause between Nominatim requests
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
+
+        console.log("✅ Excel import complete! Total rows imported:", json.length);
 
         // Update search
         if (!fuse) {
