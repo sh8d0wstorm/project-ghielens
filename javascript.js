@@ -159,7 +159,7 @@ function loadPlaces() {
         lat,
         ing,
         description: data.description || "",
-        image: data.image || "",
+        image: Array.isArray(data.image) ? data.image : normalizeImageList(data.image || data.images || data.img || ""),
         keyword: data.keyword || data.keywords || []
       });
 
@@ -230,29 +230,189 @@ const detailsContainer = document.getElementById("details");
 const searchInput = document.getElementById("search");
 
 // ===== FUNCTIONS =====
-function getImageForPlace(place) {
-  if (!place) return "";
+function normalizeImageList(value) {
+  if (!value) return [];
 
-  const imageValue = place.image || place.img || "";
-
-  if (!imageValue) {
-    if (!place.name) return "";
-    const cleanName = String(place.name).trim();
-    return `images/${encodeURI(cleanName)}.jpg`;
+  if (Array.isArray(value)) {
+    return value
+      .map(item => String(item).trim())
+      .filter(item => item !== "");
   }
 
-  if (/^(https?:)?\/\//i.test(imageValue) || imageValue.startsWith("data:")) {
-    return imageValue;
+  if (typeof value !== "string") {
+    return [String(value).trim()].filter(item => item !== "");
   }
 
-  if (imageValue.startsWith("images/") || imageValue.startsWith("./") || imageValue.startsWith("/")) {
-    return imageValue;
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+
+  if ((trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map(item => String(item).trim())
+          .filter(item => item !== "");
+      }
+    } catch (err) {
+      // ignore malformed JSON and fall through to string parsing below
+    }
   }
 
-  return `images/${encodeURI(imageValue)}`;
+  return trimmed
+    .split(/\s*[\n;|]+\s*/)
+    .map(item => item.trim())
+    .filter(item => item !== "");
 }
 
-console.log("getImageForPlace() function defined. Example image path:", getImageForPlace({ name: "ExamplePlace" }));
+function getImagesForPlace(place) {
+  if (!place) return [];
+
+  const rawImages = place.images || place.image || place.img || [];
+  const images = normalizeImageList(rawImages);
+
+  if (images.length) {
+    return images.map(image => {
+      if (/^(https?:)?\/\//i.test(image) || image.startsWith("data:")) {
+        return image;
+      }
+
+      if (image.startsWith("images/") || image.startsWith("./") || image.startsWith("/")) {
+        return image;
+      }
+
+      return `images/${encodeURI(image)}`;
+    });
+  }
+
+  if (!place.name) return [];
+
+  const baseName = String(place.name).trim();
+  const extList = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
+  const found = [];
+  let stopLooking = false;
+
+  for (let i = 0; i <= 20 && !stopLooking; i++) {
+    const suffix = i === 0 ? "" : `_${i}`;
+
+    for (const ext of extList) {
+      const candidate = `images/${encodeURI(baseName + suffix + ext)}`;
+      const img = new Image();
+      img.src = candidate;
+
+      if (img.complete && img.naturalWidth > 0) {
+        found.push(candidate);
+        continue;
+      }
+
+      if (i > 0 && !found.includes(candidate)) {
+        // keep scanning numbered versions until there are no more matches
+      }
+    }
+
+    const baseCandidate = `images/${encodeURI(baseName + (i === 0 ? "" : `_${i}`) + ".jpg")}`;
+    const altCandidate = `images/${encodeURI(baseName + (i === 0 ? "" : `_${i}`) + ".jpeg")}`;
+    const pngCandidate = `images/${encodeURI(baseName + (i === 0 ? "" : `_${i}`) + ".png")}`;
+    const webpCandidate = `images/${encodeURI(baseName + (i === 0 ? "" : `_${i}`) + ".webp")}`;
+    const gifCandidate = `images/${encodeURI(baseName + (i === 0 ? "" : `_${i}`) + ".gif")}`;
+
+    const variants = [baseCandidate, altCandidate, pngCandidate, webpCandidate, gifCandidate];
+    const hasAnyMatch = variants.some(path => {
+      const probe = new Image();
+      probe.src = path;
+      return probe.complete && probe.naturalWidth > 0;
+    });
+
+    if (!hasAnyMatch && i > 0) {
+      stopLooking = true;
+    }
+
+    if (i === 0 && !hasAnyMatch) {
+      continue;
+    }
+  }
+
+  return [...new Set(found)];
+}
+
+console.log("getImagesForPlace() function defined.");
+
+function buildGalleryHtml(imageUrls) {
+  if (!imageUrls || imageUrls.length === 0) return "";
+
+  const slides = imageUrls.map((url, index) => `
+    <div class="gallery-slide ${index === 0 ? "active" : ""}" data-index="${index}">
+      <img src="${url}" alt="${index + 1}" onerror="this.style.display='none'">
+    </div>
+  `).join("");
+
+  const dots = imageUrls.map((_, index) => `
+    <button type="button" class="gallery-dot ${index === 0 ? "active" : ""}" data-index="${index}" aria-label="Go to image ${index + 1}"></button>
+  `).join("");
+
+  const arrows = imageUrls.length > 1 ? `
+    <button type="button" class="gallery-arrow gallery-prev" aria-label="Previous image">‹</button>
+    <button type="button" class="gallery-arrow gallery-next" aria-label="Next image">›</button>
+  ` : "";
+
+  return `
+    <div class="image-gallery" data-current="0" data-total="${imageUrls.length}">
+      <div class="gallery-track">
+        ${slides}
+      </div>
+      ${arrows}
+      <div class="gallery-dots">${dots}</div>
+    </div>
+  `;
+}
+
+function setGalleryIndex(gallery, index) {
+  if (!gallery) return;
+
+  const slides = gallery.querySelectorAll(".gallery-slide");
+  const dots = gallery.querySelectorAll(".gallery-dot");
+  const total = slides.length || 1;
+  const safeIndex = ((index % total) + total) % total;
+
+  slides.forEach((slide, i) => {
+    slide.classList.toggle("active", i === safeIndex);
+  });
+
+  dots.forEach((dot, i) => {
+    dot.classList.toggle("active", i === safeIndex);
+  });
+
+  gallery.dataset.current = String(safeIndex);
+}
+
+function attachGalleryControls(popupElement) {
+  if (!popupElement) return;
+
+  const gallery = popupElement.querySelector(".image-gallery");
+  if (!gallery) return;
+
+  const total = Number(gallery.dataset.total || 0);
+  if (total <= 1) return;
+
+  const prevBtn = popupElement.querySelector(".gallery-prev");
+  const nextBtn = popupElement.querySelector(".gallery-next");
+
+  prevBtn?.addEventListener("click", () => {
+    const current = Number(gallery.dataset.current || 0);
+    setGalleryIndex(gallery, current - 1);
+  });
+
+  nextBtn?.addEventListener("click", () => {
+    const current = Number(gallery.dataset.current || 0);
+    setGalleryIndex(gallery, current + 1);
+  });
+
+  popupElement.querySelectorAll(".gallery-dot").forEach(dot => {
+    dot.addEventListener("click", () => {
+      setGalleryIndex(gallery, Number(dot.dataset.index || 0));
+    });
+  });
+}
 // ===== PLACE DISPLAY =====
 function showDetails(place) {
   if (activePlace === place) {
@@ -266,7 +426,7 @@ function showDetails(place) {
   }
 
   activePlace = place;
-  const imageUrl = getImageForPlace(place);
+  const imageUrls = getImagesForPlace(place);
 
   if (place.marker) {
     // Keep the marker centered when opening details
@@ -274,13 +434,15 @@ function showDetails(place) {
       map.setView([place.lat, place.ing], 17);
     }
 
+    const imagesHtml = imageUrls.length
+      ? imageUrls.map(url => `<img src="${url}" class="popup-image" onerror="this.style.display='none'">`).join("")
+      : "";
+
     const popupContent = `
       <div class="location-popup">
         <h3>${place.name}</h3>
 
-        ${imageUrl ? `
-  <img src="${imageUrl}" class="popup-image" onerror="this.style.display='none'">
-` : ""}
+        ${buildGalleryHtml(imageUrls)}
 
         <p>${place.description || ""}</p>
 
@@ -300,6 +462,8 @@ function showDetails(place) {
 
       if (!popup) return;
 
+      attachGalleryControls(popup);
+
       const editBtn = popup.querySelector(".popup-edit-btn");
       const deleteBtn = popup.querySelector(".popup-delete-btn");
 
@@ -317,28 +481,8 @@ function showDetails(place) {
     });
   }
 
-  detailsContainer.innerHTML = `
-    <h3>${place.name}</h3>
-
-    ${imageUrl ? `
-<img src="${imageUrl}" width="100%" onerror="this.style.display='none'">
-    ` : ""}
-
-    <p>${place.description || ""}</p>
-
-    ${adminMode ? '<button id="editBtn">Edit</button>' : ''}
-    ${adminMode ? '<button id="deleteBtn">Delete</button>' : ''}
-  `;
-
-  if (adminMode) {
-    document.getElementById("editBtn")?.addEventListener("click", () => {
-      editLocation(place);
-    });
-
-    document.getElementById("deleteBtn")?.addEventListener("click", () => {
-      deleteLocation(place);
-    });
-  }
+  // Details should only appear in the map popup; the sidebar detail panel stays empty.
+  detailsContainer.innerHTML = "";
 }
 // ===== ADD LOCATION =====
 function startAddLocation() {
@@ -364,7 +508,7 @@ function confirmAdd() {
     lat,
     ing,
     description: desc,
-    image: img,
+    image: normalizeImageList(img),
     keyword: keywordInput
       .split(",")
       .map(k => k.trim())
@@ -428,7 +572,7 @@ function confirmEdit() {
   editingPlace.latString = editingPlace.lat != null ? String(editingPlace.lat) : "";
   editingPlace.ingString = editingPlace.ing != null ? String(editingPlace.ing) : "";
   editingPlace.description = document.getElementById("e_desc").value;
-  editingPlace.image = document.getElementById("e_img").value;
+  editingPlace.image = normalizeImageList(document.getElementById("e_img").value);
 
   editingPlace.keyword = document
     .getElementById("e_keywords")
@@ -649,7 +793,7 @@ window.addEventListener("load", () => {
             keyword: row.keyword
               ? row.keyword.split(",")
               : (row.keywords ? row.keywords.split(",") : []),
-            image: row.image || row.Image || ""
+            image: normalizeImageList(row.image || row.Image || row.images || row.Images || "")
           });
 
           console.log("Excel import place:", {
