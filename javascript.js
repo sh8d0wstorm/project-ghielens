@@ -755,56 +755,63 @@ window.addEventListener("load", () => {
         const json = XLSX.utils.sheet_to_json(sheet);
 
         // Import every Excel row
-        for (const row of json) {
-          let coordinates = extractLatLngFromRow(row);
+        console.log("📊 Starting Excel import. Total rows:", json.length);
+        
+        for (let rowIndex = 0; rowIndex < json.length; rowIndex++) {
+          const row = json[rowIndex];
+          console.log(`🔄 Processing row ${rowIndex + 1}/${json.length}:`, row.name || row.Name);
+          
+          try {
+            let coordinates = extractLatLngFromRow(row);
+            console.log("📍 Extracted coordinates:", coordinates);
 
-          // If Excel has no coordinates, geocode the address
-          if (coordinates.lat == null || coordinates.ing == null) {
-            const address = row.name || row.Name;
+            // If Excel has no coordinates, geocode the address
+            if (coordinates.lat == null || coordinates.ing == null) {
+              const address = row.name || row.Name;
 
-            if (address) {
-              console.log("🌍 Geocoding:", address);
+              if (address) {
+                console.log("🌍 Geocoding:", address);
 
-              const geocoded = await geocodeAddress(address);
+                const geocoded = await geocodeAddress(address);
+                console.log("🌍 Geocode result:", geocoded);
 
-              if (geocoded) {
-                coordinates = geocoded;
+                if (geocoded) {
+                  coordinates = geocoded;
+                }
               }
             }
-          }
 
-          const place = normalizePlaceCoordinates({
-            name: row.name || row.Name || "Untitled",
-            lat: coordinates.lat,
-            ing: coordinates.ing,
-            description: row.description || row.Description || "",
-            keyword: row.keyword
-              ? row.keyword.split(",")
-              : (row.keywords ? row.keywords.split(",") : []),
-            image: normalizeImageList(row.image || row.Image || row.images || row.Images || "")
-          });
+            const place = normalizePlaceCoordinates({
+              name: row.name || row.Name || "Untitled",
+              lat: coordinates.lat,
+              ing: coordinates.ing,
+              description: row.description || row.Description || "",
+              keyword: row.keyword
+                ? row.keyword.split(",")
+                : (row.keywords ? row.keywords.split(",") : []),
+              image: normalizeImageList(row.image || row.Image || row.images || row.Images || "")
+            });
 
-          console.log("Excel import place:", {
-            raw: row,
-            coordinates,
-            parsedLat: place.lat,
-            parsedIng: place.ing,
-            name: place.name
-          });
+            console.log("Excel import place:", {
+              raw: row,
+              coordinates,
+              parsedLat: place.lat,
+              parsedIng: place.ing,
+              name: place.name
+            });
 
-          // Save to Firebase
-          try {
+            // Save to Firebase
+            console.log("💾 Saving to Firebase:", place.name);
             const docRef = await db.collection("places").add(place);
             place.id = docRef.id;
             console.log("✅ Saved to Firebase:", place.name, "ID:", place.id);
-          } catch (error) {
-            console.error("❌ Failed to save to Firebase:", place.name, error);
-            alert("❌ Error saving to Firebase: " + error.message);
-            return; // Stop importing if Firebase fails
-          }
 
-          // Small pause between Nominatim requests
-          await new Promise(resolve => setTimeout(resolve, 1000));
+            // Small pause between Nominatim requests
+            await new Promise(resolve => setTimeout(resolve, 1500));
+          } catch (error) {
+            console.error("❌ Error processing row", rowIndex + 1, ":", error);
+            console.error("Error details:", error.message);
+          }
         }
 
         console.log("✅ Excel import complete! Total rows imported:", json.length);
