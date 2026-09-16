@@ -836,12 +836,15 @@ window.addEventListener("load", () => {
 });
  
 // ===== INIT =====
-loadPlaces();
-updateUI();
+window.addEventListener("load", () => {
+  console.log("Page loaded - initializing app");
+  loadPlaces();
+  updateUI();
 
-setTimeout(() => {
-  map.invalidateSize();
-}, 100);
+  setTimeout(() => {
+    map.invalidateSize();
+  }, 100);
+});
 
 // ===== EXCEL GEOCODING IMPORT (moved from app.js into javascript.js)
 // Uses the existing `excelFile` input and the same Leaflet `map` instance.
