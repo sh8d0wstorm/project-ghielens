@@ -6,6 +6,7 @@ let isAdding = false;    // future: add-mode state
 let editingPlace = null; // currently edited place
 let places = [];
 let fuse; // declare first
+let isImporting = false; // prevent snapshot updates during import
 // ===== DATA =====
 const firebaseConfig = {
   apiKey: "AIzaSyDX-AIGkfhSEfBRDt-SRrJyVWRlmtxs7qE",
@@ -127,6 +128,11 @@ function loadPlaces() {
   // FIX: Collection changed from "locations" to "places" to match your add/edit methods
   db.collection("places").onSnapshot((snapshot) => {
     console.log("Snapshot size:", snapshot ? snapshot.size : 0);
+
+      if (isImporting) {
+        console.log("⏸️ Skipping render during Excel import");
+        return;
+      }
 
       if (!snapshot || snapshot.size === 0) {
         console.warn("No documents found in Firebase path! Check your collection name.");
@@ -754,6 +760,9 @@ window.addEventListener("load", () => {
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const json = XLSX.utils.sheet_to_json(sheet);
 
+        isImporting = true; // Prevent snapshot updates during import
+        console.log("🟢 IMPORT STARTED - blocking snapshot updates");
+
         // Import every Excel row
         console.log("📊 Starting Excel import. Total rows:", json.length);
         let successCount = 0;
@@ -789,36 +798,41 @@ window.addEventListener("load", () => {
               image: normalizeImageList(row.image || row.Image || row.images || row.Images || "")
             });
 
-            // Save to Firebase
+            // Save to Firebase with timeout
             console.log("   💾 Saving to Firebase...");
-            const docRef = await db.collection("places").add(place);
-            place.id = docRef.id;
-            console.log("   ✅ Saved ID:", place.id);
-            successCount++;
+            try {
+              const docRef = await Promise.race([
+                db.collection("places").add(place),
+                new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error("Firebase add timeout after 15s")), 15000)
+                )
+              ]);
+              place.id = docRef.id;
+              console.log("   ✅ Saved ID:", place.id);
+              successCount++;
+            } catch (firebaseErr) {
+              console.error("   ❌ Firebase save error:", firebaseErr.message);
+              errorCount++;
+            }
             
           } catch (error) {
             errorCount++;
-            console.error("   ❌ Error:", error.message);
+            console.error("   ❌ Row error:", error.message);
           }
           
-          console.log(`   ⏸️ Waiting 2s before next row...`);
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          console.log(`   ⏸️ Waiting 5s before next row...`);
+          await new Promise(resolve => setTimeout(resolve, 5000));
         }
 
+        isImporting = false; // Re-enable snapshot updates
         console.log("\n\n🎉 IMPORT COMPLETE!");
         console.log(`✅ Successful: ${successCount}`);
         console.log(`❌ Failed: ${errorCount}`);
         console.log(`📊 Total: ${json.length}`);
-
-        // Update search
-        if (!fuse) {
-          initFuse();
-        } else {
-          fuse.setCollection(places);
-        }
-
-        // Display locations
-        renderPlaces(places);
+        console.log("🟢 IMPORT FINISHED - re-enabling snapshot updates");
+        
+        // Refresh the display
+        loadPlaces();
       };
 
       reader.readAsArrayBuffer(file);
