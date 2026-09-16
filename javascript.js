@@ -810,6 +810,9 @@ window.addEventListener("load", () => {
               place.id = docRef.id;
               console.log("   ✅ Saved ID:", place.id);
               successCount++;
+              
+              // Wait a bit for snapshot to settle before continuing
+              await new Promise(resolve => setTimeout(resolve, 3000));
             } catch (firebaseErr) {
               console.error("   ❌ Firebase save error:", firebaseErr.message);
               errorCount++;
