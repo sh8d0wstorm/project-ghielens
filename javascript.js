@@ -756,25 +756,22 @@ window.addEventListener("load", () => {
 
         // Import every Excel row
         console.log("📊 Starting Excel import. Total rows:", json.length);
+        let successCount = 0;
+        let errorCount = 0;
         
         for (let rowIndex = 0; rowIndex < json.length; rowIndex++) {
           const row = json[rowIndex];
-          console.log(`🔄 Processing row ${rowIndex + 1}/${json.length}:`, row.name || row.Name);
+          console.log(`\n🔄 [${rowIndex + 1}/${json.length}] Processing: ${row.name || row.Name || "?"}`);
           
           try {
             let coordinates = extractLatLngFromRow(row);
-            console.log("📍 Extracted coordinates:", coordinates);
 
             // If Excel has no coordinates, geocode the address
             if (coordinates.lat == null || coordinates.ing == null) {
               const address = row.name || row.Name;
-
               if (address) {
-                console.log("🌍 Geocoding:", address);
-
+                console.log("   🌍 Geocoding:", address);
                 const geocoded = await geocodeAddress(address);
-                console.log("🌍 Geocode result:", geocoded);
-
                 if (geocoded) {
                   coordinates = geocoded;
                 }
@@ -792,43 +789,26 @@ window.addEventListener("load", () => {
               image: normalizeImageList(row.image || row.Image || row.images || row.Images || "")
             });
 
-            console.log("Excel import place:", {
-              raw: row,
-              coordinates,
-              parsedLat: place.lat,
-              parsedIng: place.ing,
-              name: place.name
-            });
-
-            // Save to Firebase with timeout
-            console.log("💾 Saving to Firebase:", place.name);
+            // Save to Firebase
+            console.log("   💾 Saving to Firebase...");
+            const docRef = await db.collection("places").add(place);
+            place.id = docRef.id;
+            console.log("   ✅ Saved ID:", place.id);
+            successCount++;
             
-            try {
-              const savePromise = db.collection("places").add(place);
-              const docRef = await Promise.race([
-                savePromise,
-                new Promise((_, reject) => 
-                  setTimeout(() => reject(new Error("Firebase add timeout")), 10000)
-                )
-              ]);
-              
-              place.id = docRef.id;
-              console.log("✅ Saved to Firebase:", place.name, "ID:", place.id);
-            } catch (firebaseError) {
-              console.error("❌ Firebase error for row", rowIndex + 1, ":", firebaseError.message);
-              console.log("⏭️  Skipping this row and continuing...");
-              // Don't throw - just log and continue to next row
-            }
-
-            // Small pause between Firebase writes and Nominatim requests
-            await new Promise(resolve => setTimeout(resolve, 2000));
           } catch (error) {
-            console.error("❌ Error processing row", rowIndex + 1, ":", error);
-            console.error("Error details:", error.message);
+            errorCount++;
+            console.error("   ❌ Error:", error.message);
           }
+          
+          console.log(`   ⏸️ Waiting 2s before next row...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
 
-        console.log("✅ Excel import complete! Total rows imported:", json.length);
+        console.log("\n\n🎉 IMPORT COMPLETE!");
+        console.log(`✅ Successful: ${successCount}`);
+        console.log(`❌ Failed: ${errorCount}`);
+        console.log(`📊 Total: ${json.length}`);
 
         // Update search
         if (!fuse) {
