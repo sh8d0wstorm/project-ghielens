@@ -804,6 +804,15 @@ window.addEventListener("load", () => {
             name: place.name
           });
 
+          // Save to Firebase
+          try {
+            const docRef = await db.collection("places").add(place);
+            place.id = docRef.id;
+            console.log("✅ Saved to Firebase:", place.name, "ID:", place.id);
+          } catch (error) {
+            console.error("❌ Failed to save to Firebase:", error);
+          }
+
           places.push(place);
 
           // Small pause between Nominatim requests
