@@ -800,14 +800,28 @@ window.addEventListener("load", () => {
               name: place.name
             });
 
-            // Save to Firebase
+            // Save to Firebase with timeout
             console.log("💾 Saving to Firebase:", place.name);
-            const docRef = await db.collection("places").add(place);
-            place.id = docRef.id;
-            console.log("✅ Saved to Firebase:", place.name, "ID:", place.id);
+            
+            try {
+              const savePromise = db.collection("places").add(place);
+              const docRef = await Promise.race([
+                savePromise,
+                new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error("Firebase add timeout")), 10000)
+                )
+              ]);
+              
+              place.id = docRef.id;
+              console.log("✅ Saved to Firebase:", place.name, "ID:", place.id);
+            } catch (firebaseError) {
+              console.error("❌ Firebase error for row", rowIndex + 1, ":", firebaseError.message);
+              console.log("⏭️  Skipping this row and continuing...");
+              // Don't throw - just log and continue to next row
+            }
 
-            // Small pause between Nominatim requests
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            // Small pause between Firebase writes and Nominatim requests
+            await new Promise(resolve => setTimeout(resolve, 2000));
           } catch (error) {
             console.error("❌ Error processing row", rowIndex + 1, ":", error);
             console.error("Error details:", error.message);
