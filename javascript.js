@@ -1,3 +1,20 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getFirestore,
+  onSnapshot,
+  updateDoc
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  signOut
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+
 // ===== STATE =====
 let adminMode = false;   // true = admin features enabled
 let activePlace = null;  // currently selected place
@@ -6,7 +23,7 @@ let isAdding = false;    // future: add-mode state
 let editingPlace = null; // currently edited place
 let places = [];
 let fuse; // declare first
-let isImporting = false; // prevent snapshot updates during import
+let isImporting = false; // prevent snsapshot updates during import
 // ===== DATA =====
 const firebaseConfig = {
   apiKey: "AIzaSyDX-AIGkfhSEfBRDt-SRrJyVWRlmtxs7qE",
@@ -16,9 +33,10 @@ const firebaseConfig = {
   messagingSenderId: "720120279485",
   appId: "1:720120279485:web:96b0791f6206dad21ea2d4"
 };
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-console.log(firebase.app().options.projectId);
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app, "default");
+const auth = getAuth(app);
+console.log(app.options.projectId, "Firestore database: default");
 function initFuse() {
   fuse = new Fuse(places, {
     keys: ["name", "keyword", "latString", "ingString"],
@@ -126,7 +144,7 @@ function loadPlaces() {
   console.log("Loading places...");
   console.log("🔥 loadPlaces() CALLED");
   // FIX: Collection changed from "locations" to "places" to match your add/edit methods
-  db.collection("places").onSnapshot((snapshot) => {
+  onSnapshot(collection(db, "places"), (snapshot) => {
     console.log("Snapshot size:", snapshot ? snapshot.size : 0);
 
       if (isImporting) {
@@ -329,7 +347,7 @@ function getImagesForPlace(place) {
   return [...new Set(found)];
 }
 
-console.log("getImagesForPlace() function defined.");
+  console.log("getImagesForPlace() function defined.");
 
 function buildGalleryHtml(imageUrls) {
   if (!imageUrls || imageUrls.length === 0) return "";
@@ -509,7 +527,7 @@ function confirmAdd() {
       .filter(k => k !== "")
   });
 
- db.collection("places").add(newPlace).then(docRef => {
+ addDoc(collection(db, "places"), newPlace).then(docRef => {
 
   newPlace.id = docRef.id;
 
@@ -575,7 +593,7 @@ function confirmEdit() {
     .map(k => k.trim())
     .filter(k => k !== "");
 
-  db.collection("places").doc(editingPlace.id).update({
+  updateDoc(doc(db, "places", editingPlace.id), {
     name: editingPlace.name,
     lat: editingPlace.lat,
     ing: editingPlace.ing,
@@ -592,7 +610,7 @@ function closeEditModal() {
   document.getElementById("editModal").style.display = "none";
 }
 function deleteLocation(place) {
-  db.collection("places").doc(place.id).delete().then(() => {
+  deleteDoc(doc(db, "places", place.id)).then(() => {
     loadPlaces();
   });
 }
@@ -606,6 +624,7 @@ function updateUI() {
 
   if (addBtn) addBtn.style.display = adminMode ? "inline-block" : "none";
   if (excelFile) excelFile.style.display = adminMode ? "block" : "none";
+  if (excelFile) excelFile.disabled = !adminMode;
 
   if (loginForm) loginForm.style.display = adminMode ? "none" : "block";
   document.getElementById("logoutBtn").style.display =
@@ -632,7 +651,7 @@ function updateUI() {
 }
 
 function renderPlaces(list) {
-  console.log("🟢 renderPlaces called with:", Array.isArray(list) ? list.length : typeof list, "places");
+  console.log("renderPlaces called with:", Array.isArray(list) ? list.length : typeof list, "places");
   console.log("📋 places currently contains:", places.length);
   listContainer.innerHTML = "";
 
@@ -723,22 +742,37 @@ searchInput.addEventListener("input", () => {
   searchPlaces(searchInput.value);
 });
 // ===== LOGIN SYSTEM =====
-function login() {
-  const pw = document.getElementById("password").value;
-  console.log("login() called, password entered:", pw);
 
-  if (pw === "ghielens1927") {
-    console.log("login successful");
+async function login() {
+
+  const password = document.getElementById("password").value;
+
+  try {
+
+    await signInWithEmailAndPassword(
+      auth,
+      "juno.denis2008@gmail.com",
+      password
+    );
+
     adminMode = true;
     updateUI();
-  } else {
-    console.log("login failed: incorrect password");
-  }
-}
 
-function logout() {
+  } catch (error) {
+
+    console.error("Firebase login error:", error);
+    alert("Onjuist wachtwoord.");
+
+  }
+
+}
+async function logout() {
+
+  await signOut(auth);
+
   adminMode = false;
   updateUI();
+
 }
 
 window.addEventListener("load", () => {
@@ -761,7 +795,7 @@ window.addEventListener("load", () => {
         const json = XLSX.utils.sheet_to_json(sheet);
 
         isImporting = true; // Prevent snapshot updates during import
-        console.log("🟢 IMPORT STARTED - blocking snapshot updates");
+        console.log("IMPORT STARTED - blocking snapshot updates");
 
         // Import every Excel row
         console.log("📊 Starting Excel import. Total rows:", json.length);
@@ -780,6 +814,7 @@ window.addEventListener("load", () => {
               const address = row.name || row.Name;
               if (address) {
                 console.log("   🌍 Geocoding:", address);
+                await new Promise(resolve => setTimeout(resolve, 1100));
                 const geocoded = await geocodeAddress(address);
                 if (geocoded) {
                   coordinates = geocoded;
@@ -802,7 +837,7 @@ window.addEventListener("load", () => {
             console.log("   💾 Saving to Firebase...");
             try {
               const docRef = await Promise.race([
-                db.collection("places").add(place),
+                addDoc(collection(db, "places"), place),
                 new Promise((_, reject) => 
                   setTimeout(() => reject(new Error("Firebase add timeout after 15s")), 15000)
                 )
@@ -810,9 +845,6 @@ window.addEventListener("load", () => {
               place.id = docRef.id;
               console.log("   ✅ Saved ID:", place.id);
               successCount++;
-              
-              // Wait a bit for snapshot to settle before continuing
-              await new Promise(resolve => setTimeout(resolve, 3000));
             } catch (firebaseErr) {
               console.error("   ❌ Firebase save error:", firebaseErr.message);
               errorCount++;
@@ -823,8 +855,6 @@ window.addEventListener("load", () => {
             console.error("   ❌ Row error:", error.message);
           }
           
-          console.log(`   ⏸️ Waiting 5s before next row...`);
-          await new Promise(resolve => setTimeout(resolve, 5000));
         }
 
         isImporting = false; // Re-enable snapshot updates
@@ -832,7 +862,7 @@ window.addEventListener("load", () => {
         console.log(`✅ Successful: ${successCount}`);
         console.log(`❌ Failed: ${errorCount}`);
         console.log(`📊 Total: ${json.length}`);
-        console.log("🟢 IMPORT FINISHED - re-enabling snapshot updates");
+        console.log("IMPORT FINISHED - re-enabling snapshot updates");
         
         // Refresh the display
         loadPlaces();
@@ -909,3 +939,10 @@ function validateGeocodeResult(results, expectedCity) {
   // (fallback strategy)
   return null;
 }
+
+window.confirmAdd = confirmAdd;
+window.closeAddModal = closeAddModal;
+window.confirmEdit = confirmEdit;
+window.closeEditModal = closeEditModal;
+window.login = login;
+window.logout = logout;
