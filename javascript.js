@@ -891,12 +891,8 @@ window.addEventListener("load", () => {
 
             const place = {
               name: row.name || row.Name || "Untitled",
-              keyword: row.keyword
-                ? row.keyword.split(",").map(k => k.trim()).filter(Boolean)
-                : [],
-              image: normalizeImageList(
-                row.image || row.Image || row.images || row.Images || ""
-              ),
+              keyword: [],
+              image: [],
               description: row.description || row.Description || "",
               lat: parseCoord(coordinates.lat),
               ing: parseCoord(coordinates.ing)
