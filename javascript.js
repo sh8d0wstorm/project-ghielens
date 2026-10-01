@@ -702,6 +702,8 @@ function renderPlaces(list) {
     )
   );
 
+  console.log("🔤 SORTED LIST:", list.map(place => place.name));
+
   listContainer.innerHTML = "";
 
   markers.forEach(m => map.removeLayer(m));
