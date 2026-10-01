@@ -4,7 +4,7 @@ Write-Host "🐒 Ghielens photo sync test starting..."
 Write-Host ""
 
 # Change this later once we know the exact location
-$photoSource = "C:\PATH\TO\Data-data\100 jaar\aaa"
+$photoSource = "C:\Users\KatrinGhielens\Ghielens Restauratiewerken NV\Data - data\100 jaar\aaa"
 
 Write-Host "Looking for photos in:"
 Write-Host $photoSource
