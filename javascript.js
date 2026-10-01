@@ -682,8 +682,26 @@ function updateUI() {
 }
 
 function renderPlaces(list) {
-  console.log("renderPlaces called with:", Array.isArray(list) ? list.length : typeof list, "places");
+  console.log(
+    "renderPlaces called with:",
+    Array.isArray(list) ? list.length : typeof list,
+    "places"
+  );
+
   console.log("📋 places currently contains:", places.length);
+
+  // Always sort the visible list alphabetically
+  list = [...list].sort((a, b) =>
+    String(a.name || "").localeCompare(
+      String(b.name || ""),
+      "nl",
+      {
+        sensitivity: "base",
+        numeric: true
+      }
+    )
+  );
+
   listContainer.innerHTML = "";
 
   markers.forEach(m => map.removeLayer(m));
