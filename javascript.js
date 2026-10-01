@@ -89,7 +89,7 @@ let isImporting = false; // prevent snsapshot updates during import
 // Browser-safe image folder. This should point to the folder where the photos are stored.
 // Using a local Windows path here is only valid if the app runs in a browser that allows file:// access.
 // For a normal web app, use a URL or a server-mounted folder instead.
-const photoFolder = "C:/Users/junoz/OneDrive - Ghielens/data/100 jaar/aaa";
+const photoFolder = "C:/Users/KatrinGhielens/Ghielens Restauratiewerken NV/Data - data/100 jaar/aaa";
 const photoFolderUrl = "file:///C:/Users/junoz/OneDrive%20-%20Ghielens/data/100%20jaar/aaa";
 
 // ===== DATA =====
@@ -851,27 +851,28 @@ window.addEventListener("load", () => {
         let successCount = 0;
         let errorCount = 0;
 
-        // Load all existing places once so we can skip duplicates
+        // Load existing places once so matching addresses can be updated
         const existingSnapshot = await getDocs(collection(db, "places"));
-        const existingAddresses = new Set(
-          existingSnapshot.docs
-            .map(doc => doc.data().name)
-            .filter(name => name)
-            .map(name => String(name).trim().toLowerCase())
-        );
+        const existingPlaces = new Map();
 
-        console.log("📋 Existing addresses loaded:", existingAddresses.size);
+        existingSnapshot.docs.forEach(docSnap => {
+          const data = docSnap.data();
+
+          if (data.name) {
+            existingPlaces.set(
+              String(data.name).trim().toLowerCase(),
+              docSnap.id
+            );
+          }
+        });
+
+        console.log("📋 Existing addresses loaded:", existingPlaces.size);
         
         for (let rowIndex = 0; rowIndex < json.length; rowIndex++) {
           const row = json[rowIndex];
           console.log(`\n🔄 [${rowIndex + 1}/${json.length}] Processing: ${row.name || row.Name || "?"}`);
 
           const address = row.name || row.Name;
-
-          if (address && existingAddresses.has(String(address).trim().toLowerCase())) {
-            console.log(`   ⏭️ Already exists, skipping: ${address}`);
-            continue;
-          }
           
           try {
             let coordinates = extractLatLngFromRow(row);
@@ -900,20 +901,52 @@ window.addEventListener("load", () => {
 
             // Save to Firebase with timeout
             console.log("   💾 Saving to Firebase...");
-            try {
-              const docRef = await Promise.race([
-                addDoc(collection(db, "places"), place),
-                new Promise((_, reject) => 
-                  setTimeout(() => reject(new Error("Firebase add timeout after 15s")), 15000)
-                )
-              ]);
-              place.id = docRef.id;
 
-              if (address) {
-                existingAddresses.add(String(address).trim().toLowerCase());
+            try {
+              const normalizedAddress = String(address || "")
+                .trim()
+                .toLowerCase();
+
+              const existingId = existingPlaces.get(normalizedAddress);
+
+              if (existingId) {
+                // Address already exists -> update the existing document
+                console.log(`   🔄 Updating existing place: ${address}`);
+
+                await Promise.race([
+                  updateDoc(doc(db, "places", existingId), place),
+                  new Promise((_, reject) =>
+                    setTimeout(
+                      () => reject(new Error("Firebase update timeout after 15s")),
+                      15000
+                    )
+                  )
+                ]);
+
+                place.id = existingId;
+
+                console.log("   ✅ Updated ID:", existingId);
+              } else {
+                // New address -> create a new document
+                console.log(`   ➕ Adding new place: ${address}`);
+
+                const docRef = await Promise.race([
+                  addDoc(collection(db, "places"), place),
+                  new Promise((_, reject) =>
+                    setTimeout(
+                      () => reject(new Error("Firebase add timeout after 15s")),
+                      15000
+                    )
+                  )
+                ]);
+
+                place.id = docRef.id;
+
+                existingPlaces.set(normalizedAddress, docRef.id);
+
+                console.log("   ✅ Added ID:", place.id);
               }
 
-              console.log("   ✅ Saved ID:", place.id);
               successCount++;
             } catch (firebaseErr) {
               console.error("   ❌ Firebase save error:", firebaseErr.message);
