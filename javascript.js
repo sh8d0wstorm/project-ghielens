@@ -116,11 +116,9 @@ function initFuse() {
 function normalizePlaceCoordinates(place) {
   place.lat = parseCoord(place.lat);
   place.ing = parseCoord(place.ing);
-  place.latString = place.lat != null ? String(place.lat) : "";
-  place.ingString = place.ing != null ? String(place.ing) : "";
+
   return place;
 }
-
 function parseCoord(value) {
   if (value === null || value === undefined) return null;
   if (typeof value === "number") {
@@ -893,13 +891,15 @@ window.addEventListener("load", () => {
 
             const place = normalizePlaceCoordinates({
               name: row.name || row.Name || "Untitled",
-              lat: coordinates.lat,
-              ing: coordinates.ing,
-              description: row.description || row.Description || "",
               keyword: row.keyword
-                ? row.keyword.split(",")
-                : (row.keywords ? row.keywords.split(",") : []),
-              image: normalizeImageList(row.image || row.Image || row.images || row.Images || "")
+                ? row.keyword.split(",").map(k => k.trim()).filter(Boolean)
+                : [],
+              image: normalizeImageList(
+                row.image || row.Image || row.images || row.Images || ""
+              ),
+              description: row.description || row.Description || "",
+              lat: coordinates.lat,
+              ing: coordinates.ing
             });
 
             // Save to Firebase with timeout
