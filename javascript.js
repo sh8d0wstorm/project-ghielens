@@ -889,7 +889,7 @@ window.addEventListener("load", () => {
               }
             }
 
-            const place = normalizePlaceCoordinates({
+            const place = {
               name: row.name || row.Name || "Untitled",
               keyword: row.keyword
                 ? row.keyword.split(",").map(k => k.trim()).filter(Boolean)
@@ -898,9 +898,9 @@ window.addEventListener("load", () => {
                 row.image || row.Image || row.images || row.Images || ""
               ),
               description: row.description || row.Description || "",
-              lat: coordinates.lat,
-              ing: coordinates.ing
-            });
+              lat: parseCoord(coordinates.lat),
+              ing: parseCoord(coordinates.ing)
+            };
 
             // Save to Firebase with timeout
             console.log("   💾 Saving to Firebase...");
