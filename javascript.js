@@ -24,6 +24,13 @@ let editingPlace = null; // currently edited place
 let places = [];
 let fuse; // declare first
 let isImporting = false; // prevent snsapshot updates during import
+
+// Browser-safe image folder. This should point to the folder where the photos are stored.
+// Using a local Windows path here is only valid if the app runs in a browser that allows file:// access.
+// For a normal web app, use a URL or a server-mounted folder instead.
+const photoFolder = "C:/Users/junoz/OneDrive - Ghielens/data/100 jaar/aaa";
+const photoFolderUrl = "file:///C:/Users/junoz/OneDrive%20-%20Ghielens/data/100%20jaar/aaa";
+
 // ===== DATA =====
 const firebaseConfig = {
   apiKey: "AIzaSyDX-AIGkfhSEfBRDt-SRrJyVWRlmtxs7qE",
@@ -283,71 +290,27 @@ function getImagesForPlace(place) {
   const rawImages = place.images || place.image || place.img || [];
   const images = normalizeImageList(rawImages);
 
-  if (images.length) {
-    return images.map(image => {
-      if (/^(https?:)?\/\//i.test(image) || image.startsWith("data:")) {
-        return image;
-      }
-
-      if (image.startsWith("images/") || image.startsWith("./") || image.startsWith("/")) {
-        return image;
-      }
-
-      return `images/${encodeURI(image)}`;
-    });
-  }
-
-  if (!place.name) return [];
-
-  const baseName = String(place.name).trim();
-  const extList = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
-  const found = [];
-  let stopLooking = false;
-
-  for (let i = 0; i <= 20 && !stopLooking; i++) {
-    const suffix = i === 0 ? "" : `_${i}`;
-
-    for (const ext of extList) {
-      const candidate = `images/${encodeURI(baseName + suffix + ext)}`;
-      const img = new Image();
-      img.src = candidate;
-
-      if (img.complete && img.naturalWidth > 0) {
-        found.push(candidate);
-        continue;
-      }
-
-      if (i > 0 && !found.includes(candidate)) {
-        // keep scanning numbered versions until there are no more matches
-      }
+  return images.map(image => {
+    // Already a complete URL
+    if (/^(https?:)?\/\//i.test(image)) {
+      return image;
     }
 
-    const baseCandidate = `images/${encodeURI(baseName + (i === 0 ? "" : `_${i}`) + ".jpg")}`;
-    const altCandidate = `images/${encodeURI(baseName + (i === 0 ? "" : `_${i}`) + ".jpeg")}`;
-    const pngCandidate = `images/${encodeURI(baseName + (i === 0 ? "" : `_${i}`) + ".png")}`;
-    const webpCandidate = `images/${encodeURI(baseName + (i === 0 ? "" : `_${i}`) + ".webp")}`;
-    const gifCandidate = `images/${encodeURI(baseName + (i === 0 ? "" : `_${i}`) + ".gif")}`;
-
-    const variants = [baseCandidate, altCandidate, pngCandidate, webpCandidate, gifCandidate];
-    const hasAnyMatch = variants.some(path => {
-      const probe = new Image();
-      probe.src = path;
-      return probe.complete && probe.naturalWidth > 0;
-    });
-
-    if (!hasAnyMatch && i > 0) {
-      stopLooking = true;
+    // Local paths
+    if (
+      image.startsWith("images/") ||
+      image.startsWith("./") ||
+      image.startsWith("/")
+    ) {
+      return image;
     }
 
-    if (i === 0 && !hasAnyMatch) {
-      continue;
-    }
-  }
-
-  return [...new Set(found)];
+    // Filename stored in Firebase
+    return `${photoFolderUrl}/${encodeURIComponent(image)}`;
+  });
 }
 
-  console.log("getImagesForPlace() function defined.");
+console.log("getImagesForPlace() function defined.");
 
 function buildGalleryHtml(imageUrls) {
   if (!imageUrls || imageUrls.length === 0) return "";
