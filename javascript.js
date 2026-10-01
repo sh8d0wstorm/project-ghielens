@@ -4,6 +4,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   getFirestore,
   onSnapshot,
   updateDoc
@@ -764,10 +765,28 @@ window.addEventListener("load", () => {
         console.log("📊 Starting Excel import. Total rows:", json.length);
         let successCount = 0;
         let errorCount = 0;
+
+        // Load all existing places once so we can skip duplicates
+        const existingSnapshot = await getDocs(collection(db, "places"));
+        const existingAddresses = new Set(
+          existingSnapshot.docs
+            .map(doc => doc.data().name)
+            .filter(name => name)
+            .map(name => String(name).trim().toLowerCase())
+        );
+
+        console.log("📋 Existing addresses loaded:", existingAddresses.size);
         
         for (let rowIndex = 0; rowIndex < json.length; rowIndex++) {
           const row = json[rowIndex];
           console.log(`\n🔄 [${rowIndex + 1}/${json.length}] Processing: ${row.name || row.Name || "?"}`);
+
+          const address = row.name || row.Name;
+
+          if (address && existingAddresses.has(String(address).trim().toLowerCase())) {
+            console.log(`   ⏭️ Already exists, skipping: ${address}`);
+            continue;
+          }
           
           try {
             let coordinates = extractLatLngFromRow(row);
@@ -806,6 +825,11 @@ window.addEventListener("load", () => {
                 )
               ]);
               place.id = docRef.id;
+
+              if (address) {
+                existingAddresses.add(String(address).trim().toLowerCase());
+              }
+
               console.log("   ✅ Saved ID:", place.id);
               successCount++;
             } catch (firebaseErr) {
@@ -863,7 +887,11 @@ async function geocodeAddress(address) {
   const encodedAddress = encodeURIComponent(searchAddress);
 
   const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodedAddress}&countrycodes=be&limit=1`;
+
   try {
+    // Wait 1 second before each request to respect Nominatim's rate limit
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
     const response = await fetch(url);
 
     if (!response.ok) {
@@ -876,8 +904,6 @@ async function geocodeAddress(address) {
       console.warn("No coordinates found for:", address);
       return null;
     }
-console.log("🗺️ Nominatim RAW:", data[0].lat, data[0].lon);
-console.log("🗺️ Nominatim PARSED:", parseFloat(data[0].lat), parseFloat(data[0].lon));
 
     return {
       lat: parseFloat(data[0].lat),
