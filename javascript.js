@@ -15,7 +15,67 @@ import {
   signOut
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
+async function removeDuplicatePlaces() {
+  console.log("🧹 STARTING DUPLICATE CLEANUP...");
 
+  const snapshot = await getDocs(collection(db, "places"));
+
+  const seen = new Map();
+  const duplicates = [];
+
+  snapshot.forEach((documentSnapshot) => {
+    const data = documentSnapshot.data();
+
+    if (!data.name) return;
+
+    // Normalize the address so formatting differences don't create separate entries
+    const normalizedAddress = String(data.name)
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, " ")
+      .replace(/\s*,\s*/g, ",")
+      .replace(/\s*-\s*/g, "-");
+
+    console.log(
+      "Checking:",
+      data.name,
+      "→",
+      normalizedAddress
+    );
+
+    if (seen.has(normalizedAddress)) {
+      duplicates.push(documentSnapshot.id);
+
+      console.log(
+        "🗑️ DUPLICATE FOUND:",
+        data.name,
+        "ID:",
+        documentSnapshot.id
+      );
+    } else {
+      seen.set(normalizedAddress, documentSnapshot.id);
+    }
+  });
+
+  console.log("📋 Firebase documents:", snapshot.size);
+  console.log("🗑️ Duplicates found:", duplicates.length);
+
+  // Delete duplicates
+  for (const duplicateId of duplicates) {
+    try {
+      await deleteDoc(doc(db, "places", duplicateId));
+      console.log("✅ Deleted duplicate:", duplicateId);
+    } catch (error) {
+      console.error(
+        "❌ Could not delete duplicate:",
+        duplicateId,
+        error
+      );
+    }
+  }
+
+  console.log("🎉 DUPLICATE CLEANUP FINISHED");
+}
 // ===== STATE =====
 let adminMode = false;   // true = admin features enabled
 let activePlace = null;  // currently selected place
@@ -216,7 +276,14 @@ markers.push(marker);
     });
 
     // Replace places completely with Firebase data (no duplicates)
-    places = firebasePlaces;
+    places = firebasePlaces
+      .sort((a, b) =>
+        String(a.name || "").localeCompare(
+          String(b.name || ""),
+          "nl",
+          { sensitivity: "base" }
+        )
+      );
 
     console.log("✅ Loaded from Firebase. Total places:", places.length, places.map(p => p.name));
 
@@ -844,15 +911,15 @@ window.addEventListener("load", () => {
           
         }
 
-        isImporting = false; // Re-enable snapshot updates
-        console.log("\n\n🎉 IMPORT COMPLETE!");
-        console.log(`✅ Successful: ${successCount}`);
-        console.log(`❌ Failed: ${errorCount}`);
-        console.log(`📊 Total: ${json.length}`);
-        console.log("IMPORT FINISHED - re-enabling snapshot updates");
-        
-        // Refresh the display
-        loadPlaces();
+        console.log("🎉 IMPORT COMPLETE");
+
+        await removeDuplicatePlaces();
+
+        isImporting = false;
+
+        console.log("🔄 Reloading places after duplicate cleanup...");
+
+        await loadPlaces();
       };
 
       reader.readAsArrayBuffer(file);
