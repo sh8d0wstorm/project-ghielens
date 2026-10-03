@@ -483,15 +483,10 @@ function attachGalleryControls(popupElement) {
   const imageUrls = getGalleryImageUrls(gallery);
   if (!imageUrls.length) return;
 
-  if (popupElement.__galleryHandlersBound) return;
-  popupElement.__galleryHandlersBound = true;
-
-  popupElement.addEventListener("click", (event) => {
-    const dot = event.target.closest(".gallery-dot");
-    if (!dot) return;
-
-    const nextIndex = Number(dot.dataset.index || 0);
-    setGalleryIndex(gallery, nextIndex);
+  gallery.querySelectorAll(".gallery-dot").forEach(dot => {
+    dot.onclick = () => {
+      setGalleryIndex(gallery, Number(dot.dataset.index || 0));
+    };
   });
 }
 // ===== PLACE DISPLAY =====
