@@ -415,7 +415,7 @@ function buildGalleryHtml(imageUrls) {
 
   const safeUrls = imageUrls.map(String);
   const dots = safeUrls.map((url, index) => `
-    <button type="button" class="gallery-dot ${index === 0 ? "active" : ""}" data-index="${index}" data-url="${url}" aria-label="Go to image ${index + 1}"></button>
+    <button type="button" class="gallery-dot ${index === 0 ? "active" : ""}" data-index="${index}" data-url="${url}" onclick="setGalleryIndex(this.closest('.image-gallery'), ${index})" aria-label="Go to image ${index + 1}"></button>
   `).join("");
 
   const urlsJson = JSON.stringify(safeUrls);
