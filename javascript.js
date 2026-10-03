@@ -107,8 +107,7 @@ const SUPABASE_BUCKET = "place-photos";
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   accessToken: async () => {
     const user = auth.currentUser;
-    if (!user) throw new Error("Sign in with the Firebase admin account before uploading pictures.");
-    return user.getIdToken();
+    return user ? user.getIdToken() : null;
   }
 });
 console.log(app.options.projectId, "Firestore database: default");
@@ -826,120 +825,10 @@ async function logout() {
   updateUI();
 }
 
-function xmlElementsByName(xml, name) {
-  return Array.from(xml.getElementsByTagName("*")).filter(element => element.localName === name);
-}
-
-function xmlAttributeByName(element, name) {
-  return Array.from(element.attributes).find(attribute => attribute.localName === name)?.value;
-}
-
-function resolveZipPath(baseFilePath, target) {
-  if (target.startsWith("/")) return target.slice(1);
-
-  const parts = baseFilePath.split("/");
-  parts.pop();
-  target.split("/").forEach(part => {
-    if (!part || part === ".") return;
-    if (part === "..") parts.pop();
-    else parts.push(part);
-  });
-
-  return parts.join("/");
-}
-
-function readRelationships(xml) {
-  return new Map(xmlElementsByName(xml, "Relationship").map(relationship => [
-    relationship.getAttribute("Id"),
-    relationship.getAttribute("Target")
-  ]));
-}
-
-async function extractWorkbookImages(workbookBytes, firstSheetName) {
-  const zip = await JSZip.loadAsync(workbookBytes);
-  const parser = new DOMParser();
-  const parseXml = (text, path) => {
-    const xml = parser.parseFromString(text, "application/xml");
-    const parserError = xml.getElementsByTagName("parsererror")[0];
-    if (parserError) throw new Error(`Invalid XML in ${path}: ${parserError.textContent}`);
-    return xml;
-  };
-  const readXml = async path => {
-    const file = zip.file(path);
-    if (!file) throw new Error(`Workbook relationship points to missing file: ${path}`);
-    return parseXml(await file.async("text"), path);
-  };
-
-  const workbookPath = "xl/workbook.xml";
-  const workbookXml = await readXml(workbookPath);
-  const workbookRelationships = readRelationships(await readXml("xl/_rels/workbook.xml.rels"));
-  const sheetElement = xmlElementsByName(workbookXml, "sheet")
-    .find(element => element.getAttribute("name") === firstSheetName);
-  const sheetTarget = sheetElement && workbookRelationships.get(xmlAttributeByName(sheetElement, "id"));
-  if (!sheetTarget) throw new Error(`Could not resolve worksheet "${firstSheetName}" in the workbook.`);
-
-  const sheetPath = resolveZipPath(workbookPath, sheetTarget);
-  const sheetXml = await readXml(sheetPath);
-  const drawingElement = xmlElementsByName(sheetXml, "drawing")[0];
-  if (!drawingElement) {
-    console.warn(`No embedded-picture drawing found on worksheet "${firstSheetName}".`);
-    return new Map();
-  }
-
-  const sheetRelationshipsPath = sheetPath.replace(/([^/]+)$/, "_rels/$1.rels");
-  const sheetRelationships = readRelationships(await readXml(sheetRelationshipsPath));
-  const drawingTarget = sheetRelationships.get(xmlAttributeByName(drawingElement, "id"));
-  if (!drawingTarget) throw new Error(`Could not resolve the picture drawing for worksheet "${firstSheetName}".`);
-
-  const drawingPath = resolveZipPath(sheetPath, drawingTarget);
-  const drawingXml = await readXml(drawingPath);
-  const drawingRelationshipsPath = drawingPath.replace(/([^/]+)$/, "_rels/$1.rels");
-  const drawingRelationships = readRelationships(await readXml(drawingRelationshipsPath));
-  const imagesByRow = new Map();
-  const mimeByExtension = {
-    bmp: "image/bmp", gif: "image/gif", jpeg: "image/jpeg", jpg: "image/jpeg",
-    png: "image/png", tif: "image/tiff", tiff: "image/tiff", webp: "image/webp"
-  };
-  const anchors = xmlElementsByName(drawingXml, "twoCellAnchor")
-    .concat(xmlElementsByName(drawingXml, "oneCellAnchor"));
-
-  for (const anchor of anchors) {
-    const picture = xmlElementsByName(anchor, "pic")[0];
-    if (!picture) continue;
-    const from = xmlElementsByName(anchor, "from")[0];
-    const rowElement = from && xmlElementsByName(from, "row")[0];
-    const blip = xmlElementsByName(picture, "blip")[0];
-    if (!rowElement || !blip) {
-      throw new Error("Found an embedded picture without a usable worksheet row anchor.");
-    }
-
-    const imageTarget = drawingRelationships.get(xmlAttributeByName(blip, "embed"));
-    if (!imageTarget) throw new Error("Found an embedded picture without a media-file relationship.");
-
-    const imagePath = resolveZipPath(drawingPath, imageTarget);
-    const imageFile = zip.file(imagePath);
-    if (!imageFile) throw new Error(`Embedded image file not found: ${imagePath}`);
-
-    const extension = imagePath.split(".").pop().toLowerCase();
-    const imageBytes = await imageFile.async("uint8array");
-    if (!imageBytes.length) throw new Error(`Embedded image file is empty: ${imagePath}`);
-    const image = {
-      blob: new Blob([imageBytes], { type: mimeByExtension[extension] || "application/octet-stream" }),
-      name: imagePath.split("/").pop()
-    };
-    const rowNumber = Number(rowElement.textContent);
-    if (!imagesByRow.has(rowNumber)) imagesByRow.set(rowNumber, []);
-    imagesByRow.get(rowNumber).push(image);
-  }
-
-  const imageCount = Array.from(imagesByRow.values())
-    .reduce((total, images) => total + images.length, 0);
-  console.info(`Workbook image extraction found ${imageCount} image(s) across ${imagesByRow.size} row(s).`);
-
-  return imagesByRow;
-}
-
 async function uploadImageToSupabase(image) {
+  if (!auth.currentUser) {
+    throw new Error("Sign in with the Firebase admin account before uploading pictures.");
+  }
   if (SUPABASE_PUBLISHABLE_KEY === "PASTE_SUPABASE_PUBLISHABLE_KEY_HERE") {
     throw new Error("Set SUPABASE_PUBLISHABLE_KEY in javascript.js to the Supabase publishable key.");
   }
@@ -998,7 +887,7 @@ window.addEventListener("load", () => {
         const firstDataRow = hasHeader ? 1 : 0;
         let imagesByRow;
         try {
-          imagesByRow = await extractWorkbookImages(workbookBytes, firstSheetName);
+          imagesByRow = await window.extractWorkbookImages(workbookBytes, firstSheetName);
         } catch (extractionError) {
           throw new Error(`Excel picture extraction failed: ${extractionError.message}`);
         }
