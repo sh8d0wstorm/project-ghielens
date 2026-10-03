@@ -413,30 +413,52 @@ console.log("getImagesForPlace() function defined.");
 function buildGalleryHtml(imageUrls) {
   if (!imageUrls || imageUrls.length === 0) return "";
 
-  const dots = imageUrls.map((url, index) => `
-    <button type="button" class="gallery-dot ${index === 0 ? "active" : ""}" data-index="${index}" data-url="${url}" aria-label="Go to image ${index + 1}"></button>
+  const safeUrls = imageUrls.map(String);
+  const dots = safeUrls.map((_, index) => `
+    <button type="button" class="gallery-dot ${index === 0 ? "active" : ""}" data-index="${index}" aria-label="Go to image ${index + 1}"></button>
   `).join("");
 
-  const arrows = imageUrls.length > 1 ? `
+  const arrows = safeUrls.length > 1 ? `
     <button type="button" class="gallery-arrow gallery-prev" aria-label="Previous image">‹</button>
     <button type="button" class="gallery-arrow gallery-next" aria-label="Next image">›</button>
   ` : "";
 
+  const urlsJson = JSON.stringify(safeUrls);
+
   return `
-    <div class="image-gallery" data-current="0" data-total="${imageUrls.length}">
-      <img class="gallery-main-image" src="${imageUrls[0]}" alt="Image 1" onerror="this.style.display='none'">
+    <div class="image-gallery" data-current="0" data-total="${safeUrls.length}" data-urls='${urlsJson.replace(/'/g, "&apos;")}'>
+      <img class="gallery-main-image" src="${safeUrls[0]}" alt="Image 1" onerror="this.style.display='none'">
       ${arrows}
       <div class="gallery-dots">${dots}</div>
     </div>
   `;
 }
 
+function getGalleryImageUrls(gallery) {
+  if (!gallery) return [];
+
+  const raw = gallery.dataset.urls || "[]";
+
+  try {
+    const parsed = JSON.parse(raw.replace(/&apos;/g, "'"));
+    if (Array.isArray(parsed) && parsed.length) {
+      return parsed.filter(Boolean);
+    }
+  } catch (err) {
+    console.warn("Could not parse gallery URLs:", err);
+  }
+
+  return Array.from(gallery.querySelectorAll(".gallery-dot"))
+    .map(dot => dot.dataset.url || "")
+    .filter(Boolean);
+}
+
 function setGalleryIndex(gallery, index) {
   if (!gallery) return;
 
-  const imageUrls = Array.from(gallery.querySelectorAll(".gallery-dot")).map(dot => dot.dataset.url || "").filter(Boolean);
+  const imageUrls = getGalleryImageUrls(gallery);
   const total = imageUrls.length || Number(gallery.dataset.total || 0);
-  const safeIndex = ((index % total) + total) % total;
+  const safeIndex = total > 0 ? ((index % total) + total) % total : 0;
 
   const mainImage = gallery.querySelector(".gallery-main-image");
   const dots = gallery.querySelectorAll(".gallery-dot");
@@ -464,12 +486,10 @@ function attachGalleryControls(popupElement) {
   const total = Number(gallery.dataset.total || 0);
   if (total <= 1) return;
 
-  const imageUrls = Array.from(gallery.querySelectorAll(".gallery-dot")).map(dot => dot.dataset.url || "").filter(Boolean);
+  const imageUrls = getGalleryImageUrls(gallery);
   if (!imageUrls.length) return;
 
   gallery.querySelectorAll(".gallery-dot").forEach(dot => {
-    const dotUrl = dot.dataset.url || "";
-    if (!dotUrl) return;
     dot.addEventListener("click", () => {
       setGalleryIndex(gallery, Number(dot.dataset.index || 0));
     });
