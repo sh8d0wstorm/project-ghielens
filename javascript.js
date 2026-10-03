@@ -415,13 +415,11 @@ function buildGalleryHtml(imageUrls) {
 
   const safeUrls = imageUrls.map(String);
   const dots = safeUrls.map((url, index) => `
-    <button type="button" class="gallery-dot ${index === 0 ? "active" : ""}" data-index="${index}" data-url="${url}" onclick="setGalleryIndex(this.closest('.image-gallery'), ${index})" aria-label="Go to image ${index + 1}"></button>
+    <button type="button" class="gallery-dot ${index === 0 ? "active" : ""}" data-index="${index}" data-url="${url}" aria-label="Go to image ${index + 1}"></button>
   `).join("");
 
-  const urlsJson = JSON.stringify(safeUrls);
-
   return `
-    <div class="image-gallery" data-current="0" data-total="${safeUrls.length}" data-urls='${urlsJson.replace(/'/g, "&apos;")}'>
+    <div class="image-gallery" data-current="0" data-total="${safeUrls.length}">
       <img class="gallery-main-image" src="${safeUrls[0]}" alt="Image 1" onerror="this.style.display='none'">
       <div class="gallery-dots">${dots}</div>
     </div>
@@ -430,16 +428,8 @@ function buildGalleryHtml(imageUrls) {
 
 function getGalleryImageUrls(gallery) {
   if (!gallery) return [];
-
-  const raw = gallery.dataset.urls || "[]";
-
-  try {
-    const parsed = JSON.parse(raw.replace(/&apos;/g, "'"));
-    if (Array.isArray(parsed) && parsed.length) {
-      return parsed.filter(Boolean);
-    }
-  } catch (err) {
-    console.warn("Could not parse gallery URLs:", err);
+  if (Array.isArray(gallery.__imageUrls) && gallery.__imageUrls.length) {
+    return gallery.__imageUrls;
   }
 
   return Array.from(gallery.querySelectorAll(".gallery-dot"))
@@ -480,8 +470,9 @@ function attachGalleryControls(popupElement) {
   const total = Number(gallery.dataset.total || 0);
   if (total <= 1) return;
 
-  const imageUrls = getGalleryImageUrls(gallery);
-  if (!imageUrls.length) return;
+  gallery.__imageUrls = Array.from(gallery.querySelectorAll(".gallery-dot"))
+    .map(dot => dot.dataset.url || "")
+    .filter(Boolean);
 
   gallery.querySelectorAll(".gallery-dot").forEach(dot => {
     dot.onclick = () => {
