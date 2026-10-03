@@ -14,6 +14,7 @@ import {
   signInWithEmailAndPassword,
   signOut
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 async function removeDuplicatePlaces() {
   console.log("🧹 STARTING DUPLICATE CLEANUP...");
@@ -86,10 +87,6 @@ let places = [];
 let fuse; // declare first
 let isImporting = false; // prevent snsapshot updates during import
 
-// Browser-safe image folder. This should point to the folder where the photos are stored.
-// Using a local Windows path here is only valid if the app runs in a browser that allows file:// access.
-// For a normal web app, use a URL or a server-mounted folder instead.
-const photoFolder = "C:/Users/KatrinGhielens/Ghielens Restauratiewerken NV/Data - data/100 jaar/aaa";
 const photoFolderUrl = "file:///C:/Users/junoz/OneDrive%20-%20Ghielens/data/100%20jaar/aaa";
 
 // ===== DATA =====
@@ -104,6 +101,16 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app, "default");
 const auth = getAuth(app);
+const SUPABASE_URL = "https://ekhxcltruzmufagywohk.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "PASTE_SUPABASE_PUBLISHABLE_KEY_HERE";
+const SUPABASE_BUCKET = "place-photos";
+const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  accessToken: async () => {
+    const user = auth.currentUser;
+    if (!user) throw new Error("Sign in with the Firebase admin account before uploading pictures.");
+    return user.getIdToken();
+  }
+});
 console.log(app.options.projectId, "Firestore database: default");
 function initFuse() {
   fuse = new Fuse(places, {
@@ -793,11 +800,9 @@ searchInput.addEventListener("input", () => {
 // ===== LOGIN SYSTEM =====
 
 async function login() {
-
   const password = document.getElementById("password").value;
 
   try {
-
     await signInWithEmailAndPassword(
       auth,
       "juno.denis2008@gmail.com",
@@ -816,164 +821,310 @@ async function login() {
 
 }
 async function logout() {
-
   await signOut(auth);
-
   adminMode = false;
   updateUI();
+}
 
+function xmlElementsByName(xml, name) {
+  return Array.from(xml.getElementsByTagName("*")).filter(element => element.localName === name);
+}
+
+function xmlAttributeByName(element, name) {
+  return Array.from(element.attributes).find(attribute => attribute.localName === name)?.value;
+}
+
+function resolveZipPath(baseFilePath, target) {
+  if (target.startsWith("/")) return target.slice(1);
+
+  const parts = baseFilePath.split("/");
+  parts.pop();
+  target.split("/").forEach(part => {
+    if (!part || part === ".") return;
+    if (part === "..") parts.pop();
+    else parts.push(part);
+  });
+
+  return parts.join("/");
+}
+
+function readRelationships(xml) {
+  return new Map(xmlElementsByName(xml, "Relationship").map(relationship => [
+    relationship.getAttribute("Id"),
+    relationship.getAttribute("Target")
+  ]));
+}
+
+async function extractWorkbookImages(workbookBytes, firstSheetName) {
+  const zip = await JSZip.loadAsync(workbookBytes);
+  const parser = new DOMParser();
+  const parseXml = (text, path) => {
+    const xml = parser.parseFromString(text, "application/xml");
+    const parserError = xml.getElementsByTagName("parsererror")[0];
+    if (parserError) throw new Error(`Invalid XML in ${path}: ${parserError.textContent}`);
+    return xml;
+  };
+  const readXml = async path => {
+    const file = zip.file(path);
+    if (!file) throw new Error(`Workbook relationship points to missing file: ${path}`);
+    return parseXml(await file.async("text"), path);
+  };
+
+  const workbookPath = "xl/workbook.xml";
+  const workbookXml = await readXml(workbookPath);
+  const workbookRelationships = readRelationships(await readXml("xl/_rels/workbook.xml.rels"));
+  const sheetElement = xmlElementsByName(workbookXml, "sheet")
+    .find(element => element.getAttribute("name") === firstSheetName);
+  const sheetTarget = sheetElement && workbookRelationships.get(xmlAttributeByName(sheetElement, "id"));
+  if (!sheetTarget) throw new Error(`Could not resolve worksheet "${firstSheetName}" in the workbook.`);
+
+  const sheetPath = resolveZipPath(workbookPath, sheetTarget);
+  const sheetXml = await readXml(sheetPath);
+  const drawingElement = xmlElementsByName(sheetXml, "drawing")[0];
+  if (!drawingElement) {
+    console.warn(`No embedded-picture drawing found on worksheet "${firstSheetName}".`);
+    return new Map();
+  }
+
+  const sheetRelationshipsPath = sheetPath.replace(/([^/]+)$/, "_rels/$1.rels");
+  const sheetRelationships = readRelationships(await readXml(sheetRelationshipsPath));
+  const drawingTarget = sheetRelationships.get(xmlAttributeByName(drawingElement, "id"));
+  if (!drawingTarget) throw new Error(`Could not resolve the picture drawing for worksheet "${firstSheetName}".`);
+
+  const drawingPath = resolveZipPath(sheetPath, drawingTarget);
+  const drawingXml = await readXml(drawingPath);
+  const drawingRelationshipsPath = drawingPath.replace(/([^/]+)$/, "_rels/$1.rels");
+  const drawingRelationships = readRelationships(await readXml(drawingRelationshipsPath));
+  const imagesByRow = new Map();
+  const mimeByExtension = {
+    bmp: "image/bmp", gif: "image/gif", jpeg: "image/jpeg", jpg: "image/jpeg",
+    png: "image/png", tif: "image/tiff", tiff: "image/tiff", webp: "image/webp"
+  };
+  const anchors = xmlElementsByName(drawingXml, "twoCellAnchor")
+    .concat(xmlElementsByName(drawingXml, "oneCellAnchor"));
+
+  for (const anchor of anchors) {
+    const picture = xmlElementsByName(anchor, "pic")[0];
+    if (!picture) continue;
+    const from = xmlElementsByName(anchor, "from")[0];
+    const rowElement = from && xmlElementsByName(from, "row")[0];
+    const blip = xmlElementsByName(picture, "blip")[0];
+    if (!rowElement || !blip) {
+      throw new Error("Found an embedded picture without a usable worksheet row anchor.");
+    }
+
+    const imageTarget = drawingRelationships.get(xmlAttributeByName(blip, "embed"));
+    if (!imageTarget) throw new Error("Found an embedded picture without a media-file relationship.");
+
+    const imagePath = resolveZipPath(drawingPath, imageTarget);
+    const imageFile = zip.file(imagePath);
+    if (!imageFile) throw new Error(`Embedded image file not found: ${imagePath}`);
+
+    const extension = imagePath.split(".").pop().toLowerCase();
+    const imageBytes = await imageFile.async("uint8array");
+    if (!imageBytes.length) throw new Error(`Embedded image file is empty: ${imagePath}`);
+    const image = {
+      blob: new Blob([imageBytes], { type: mimeByExtension[extension] || "application/octet-stream" }),
+      name: imagePath.split("/").pop()
+    };
+    const rowNumber = Number(rowElement.textContent);
+    if (!imagesByRow.has(rowNumber)) imagesByRow.set(rowNumber, []);
+    imagesByRow.get(rowNumber).push(image);
+  }
+
+  const imageCount = Array.from(imagesByRow.values())
+    .reduce((total, images) => total + images.length, 0);
+  console.info(`Workbook image extraction found ${imageCount} image(s) across ${imagesByRow.size} row(s).`);
+
+  return imagesByRow;
+}
+
+async function uploadImageToSupabase(image) {
+  if (SUPABASE_PUBLISHABLE_KEY === "PASTE_SUPABASE_PUBLISHABLE_KEY_HERE") {
+    throw new Error("Set SUPABASE_PUBLISHABLE_KEY in javascript.js to the Supabase publishable key.");
+  }
+
+  const filePath = `places/${crypto.randomUUID()}-${image.name}`;
+  const { data, error } = await supabase.storage
+    .from(SUPABASE_BUCKET)
+    .upload(filePath, image.blob, {
+      contentType: image.blob.type || "application/octet-stream"
+    });
+
+  if (error) throw error;
+
+  const { data: { publicUrl } } = supabase.storage
+    .from(SUPABASE_BUCKET)
+    .getPublicUrl(data.path);
+
+  return publicUrl;
+}
+
+function normalizeAddressKey(address) {
+  return String(address || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 window.addEventListener("load", () => {
   const excelFileInput = document.getElementById("excelFile");
+  if (!excelFileInput) return;
 
-  if (excelFileInput) {
-    excelFileInput.addEventListener("change", function (e) {
-      if (!adminMode) return;
+  excelFileInput.addEventListener("change", event => {
+    if (!adminMode) return;
 
-      const file = e.target.files[0];
-      if (!file) return;
+    const file = event.target.files[0];
+    if (!file) return;
 
-      const reader = new FileReader();
+    const reader = new FileReader();
+    reader.onload = async loadEvent => {
+      isImporting = true;
+      let successCount = 0;
+      let errorCount = 0;
+      let imageErrorCount = 0;
+      let firestoreSaveErrorCount = 0;
+      let matchedImageCount = 0;
+      let extractedImageCount = null;
 
-      reader.onload = async function (evt) {
-        const data = new Uint8Array(evt.target.result);
-        const workbook = XLSX.read(data, { type: "array" });
-
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json(sheet);
-
-        isImporting = true; // Prevent snapshot updates during import
-        console.log("IMPORT STARTED - blocking snapshot updates");
-
-        // Import every Excel row
-        console.log("📊 Starting Excel import. Total rows:", json.length);
-        let successCount = 0;
-        let errorCount = 0;
-
-        // Load existing places once so matching addresses can be updated
+      try {
+        const workbookBytes = new Uint8Array(loadEvent.target.result);
+        const workbook = XLSX.read(workbookBytes, { type: "array" });
+        const firstSheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[firstSheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        const sheetRowOffset = sheet["!ref"]
+          ? XLSX.utils.decode_range(sheet["!ref"]).s.r
+          : 0;
+        const headerNames = (rows[0] || []).map(value => String(value).trim().toLowerCase());
+        const hasHeader = ["name", "address", "adres", "naam"].includes(headerNames[0]);
+        const firstDataRow = hasHeader ? 1 : 0;
+        let imagesByRow;
+        try {
+          imagesByRow = await extractWorkbookImages(workbookBytes, firstSheetName);
+        } catch (extractionError) {
+          throw new Error(`Excel picture extraction failed: ${extractionError.message}`);
+        }
+        extractedImageCount = Array.from(imagesByRow.values())
+          .reduce((total, rowImages) => total + rowImages.length, 0);
+        if (!extractedImageCount) {
+          console.warn("No embedded pictures were extracted. Check that the workbook contains pictures anchored to the first worksheet.");
+        }
         const existingSnapshot = await getDocs(collection(db, "places"));
         const existingPlaces = new Map();
 
         existingSnapshot.docs.forEach(docSnap => {
           const data = docSnap.data();
-
           if (data.name) {
-            existingPlaces.set(
-              String(data.name).trim().toLowerCase(),
-              docSnap.id
-            );
+            existingPlaces.set(normalizeAddressKey(data.name), {
+              id: docSnap.id,
+              image: normalizeImageList(data.image || data.images || data.img || "")
+            });
           }
         });
 
-        console.log("📋 Existing addresses loaded:", existingPlaces.size);
-        
-        for (let rowIndex = 0; rowIndex < json.length; rowIndex++) {
-          const row = json[rowIndex];
-          console.log(`\n🔄 [${rowIndex + 1}/${json.length}] Processing: ${row.name || row.Name || "?"}`);
+        for (let rowNumber = firstDataRow; rowNumber < rows.length; rowNumber++) {
+          const cells = rows[rowNumber] || [];
+          const address = String(cells[0] || "").trim();
+          if (!address) continue;
 
-          const address = row.name || row.Name;
-          
+          const row = {};
+          if (hasHeader) {
+            headerNames.forEach((header, columnIndex) => {
+              if (header) row[header] = cells[columnIndex];
+            });
+          }
+          row.name = address;
+
           try {
             let coordinates = extractLatLngFromRow(row);
-
-            // If Excel has no coordinates, geocode the address
             if (coordinates.lat == null || coordinates.ing == null) {
-              const address = row.name || row.Name;
-              if (address) {
-                console.log("   🌍 Geocoding:", address);
-                await new Promise(resolve => setTimeout(resolve, 1100));
-                const geocoded = await geocodeAddress(address);
-                if (geocoded) {
-                  coordinates = geocoded;
-                }
+              const geocoded = await geocodeAddress(address);
+              if (geocoded) coordinates = geocoded;
+            }
+
+            const imageUrls = [];
+            const worksheetRow = rowNumber + sheetRowOffset;
+            const rowImages = imagesByRow.get(worksheetRow) || [];
+            matchedImageCount += rowImages.length;
+            if (rowImages.length) {
+              console.info(`Mapped ${rowImages.length} workbook image(s) from worksheet row ${worksheetRow + 1} to ${address}.`);
+            }
+            for (const picture of rowImages) {
+              try {
+                imageUrls.push(await uploadImageToSupabase(picture));
+              } catch (uploadError) {
+                imageErrorCount++;
+                console.error(`Supabase upload failed for ${address} (${picture.name}):`, uploadError);
               }
             }
 
+            const descriptionKey = headerNames.find(header => ["description", "beschrijving", "omschrijving"].includes(header));
             const place = {
-              name: row.name || row.Name || "Untitled",
+              name: address,
               keyword: [],
-              image: [],
-              description: row.description || row.Description || "",
+              description: descriptionKey ? row[descriptionKey] || "" : "",
               lat: parseCoord(coordinates.lat),
               ing: parseCoord(coordinates.ing)
             };
+            const normalizedAddress = normalizeAddressKey(address);
+            const existingPlace = existingPlaces.get(normalizedAddress);
 
-            // Save to Firebase with timeout
-            console.log("   💾 Saving to Firebase...");
+            if (existingPlace) {
+              place.image = [...new Set([...existingPlace.image, ...imageUrls])];
+            } else {
+              place.image = imageUrls;
+            }
 
             try {
-              const normalizedAddress = String(address || "")
-                .trim()
-                .toLowerCase();
-
-              const existingId = existingPlaces.get(normalizedAddress);
-
-              if (existingId) {
-                // Address already exists -> update the existing document
-                console.log(`   🔄 Updating existing place: ${address}`);
-
-                await Promise.race([
-                  updateDoc(doc(db, "places", existingId), place),
-                  new Promise((_, reject) =>
-                    setTimeout(
-                      () => reject(new Error("Firebase update timeout after 15s")),
-                      15000
-                    )
-                  )
-                ]);
-
-                place.id = existingId;
-
-                console.log("   ✅ Updated ID:", existingId);
+              if (existingPlace) {
+                await updateDoc(doc(db, "places", existingPlace.id), place);
+                existingPlace.image = place.image;
               } else {
-                // New address -> create a new document
-                console.log(`   ➕ Adding new place: ${address}`);
-
-                const docRef = await Promise.race([
-                  addDoc(collection(db, "places"), place),
-                  new Promise((_, reject) =>
-                    setTimeout(
-                      () => reject(new Error("Firebase add timeout after 15s")),
-                      15000
-                    )
-                  )
-                ]);
-
-                place.id = docRef.id;
-
-                existingPlaces.set(normalizedAddress, docRef.id);
-
-                console.log("   ✅ Added ID:", place.id);
+                const docRef = await addDoc(collection(db, "places"), place);
+                existingPlaces.set(normalizedAddress, { id: docRef.id, image: imageUrls });
               }
-
-              successCount++;
-            } catch (firebaseErr) {
-              console.error("   ❌ Firebase save error:", firebaseErr.message);
+            } catch (saveError) {
               errorCount++;
+              firestoreSaveErrorCount++;
+              console.error(`Firestore save failed for ${address}:`, saveError);
+              continue;
             }
-            
+
+            successCount++;
           } catch (error) {
             errorCount++;
-            console.error("   ❌ Row error:", error.message);
+            console.error(`Import failed for ${address}:`, error);
           }
-          
         }
 
-        console.log("🎉 IMPORT COMPLETE");
-
         await removeDuplicatePlaces();
-
+      } catch (error) {
+        errorCount++;
+        console.error("Workbook import failed:", error);
+        alert(`Workbook import failed: ${error.message}`);
+      } finally {
         isImporting = false;
-
-        console.log("🔄 Reloading places after duplicate cleanup...");
-
         await loadPlaces();
-      };
+        excelFileInput.value = "";
+        console.log(`Import complete. Extracted pictures: ${typeof extractedImageCount === "number" ? extractedImageCount : "unavailable"}; matched workbook images: ${matchedImageCount}; places saved: ${successCount}; row/save errors: ${errorCount}; Firestore save errors: ${firestoreSaveErrorCount}; upload errors: ${imageErrorCount}.`);
+        const importWarnings = [];
+        if (typeof extractedImageCount === "number" && extractedImageCount === 0) {
+          importWarnings.push("No embedded pictures were extracted from the first worksheet.");
+        } else if (typeof extractedImageCount === "number" && matchedImageCount < extractedImageCount) {
+          importWarnings.push(`${extractedImageCount - matchedImageCount} extracted picture(s) did not match a non-empty address row.`);
+        }
+        if (imageErrorCount) {
+          importWarnings.push(`${imageErrorCount} picture upload(s) failed; existing images were kept.`);
+        }
+        if (firestoreSaveErrorCount) {
+          importWarnings.push(`${firestoreSaveErrorCount} Firestore save(s) failed. See the browser console for the affected addresses and errors.`);
+        }
+        if (importWarnings.length) {
+          alert(`Imported ${successCount} address row(s). ${importWarnings.join(" ")}`);
+        }
+      }
+    };
 
-      reader.readAsArrayBuffer(file);
-    });
-  }
+    reader.readAsArrayBuffer(file);
+  });
 });
  
 // ===== INIT =====

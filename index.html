@@ -20,7 +20,7 @@
     📂 Hidden Excel import
     (only visible in admin mode)
   ========================== -->
-  <input type="file" id="excelFile" style="display:none;" />
+  <input type="file" id="excelFile" accept=".xlsx" style="display:none;" />
 
   <div id="container">
 
@@ -109,11 +109,12 @@
   <!-- Fuse.js fuzzy search -->
   <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2"></script>
 
+  <!-- Excel workbook reader and ZIP image extraction -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
   <!-- Your app logic -->
   <script type="module" src="javascript.js"></script>
-
-  <!-- ⚠️ Excel library (your link is incomplete in snippet) -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
 </body>
 </html>
