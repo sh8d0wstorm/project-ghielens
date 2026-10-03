@@ -413,14 +413,8 @@ console.log("getImagesForPlace() function defined.");
 function buildGalleryHtml(imageUrls) {
   if (!imageUrls || imageUrls.length === 0) return "";
 
-  const slides = imageUrls.map((url, index) => `
-    <div class="gallery-slide ${index === 0 ? "active" : ""}" data-index="${index}">
-      <img src="${url}" alt="${index + 1}" onerror="this.style.display='none'">
-    </div>
-  `).join("");
-
-  const dots = imageUrls.map((_, index) => `
-    <button type="button" class="gallery-dot ${index === 0 ? "active" : ""}" data-index="${index}" aria-label="Go to image ${index + 1}"></button>
+  const dots = imageUrls.map((url, index) => `
+    <button type="button" class="gallery-dot ${index === 0 ? "active" : ""}" data-index="${index}" data-url="${url}" aria-label="Go to image ${index + 1}"></button>
   `).join("");
 
   const arrows = imageUrls.length > 1 ? `
@@ -430,9 +424,7 @@ function buildGalleryHtml(imageUrls) {
 
   return `
     <div class="image-gallery" data-current="0" data-total="${imageUrls.length}">
-      <div class="gallery-track">
-        ${slides}
-      </div>
+      <img class="gallery-main-image" src="${imageUrls[0]}" alt="Image 1" onerror="this.style.display='none'">
       ${arrows}
       <div class="gallery-dots">${dots}</div>
     </div>
@@ -442,14 +434,19 @@ function buildGalleryHtml(imageUrls) {
 function setGalleryIndex(gallery, index) {
   if (!gallery) return;
 
-  const slides = gallery.querySelectorAll(".gallery-slide");
-  const dots = gallery.querySelectorAll(".gallery-dot");
-  const total = slides.length || 1;
+  const imageUrls = Array.from(gallery.querySelectorAll(".gallery-dot")).map(dot => dot.dataset.url || "").filter(Boolean);
+  const total = imageUrls.length || Number(gallery.dataset.total || 0);
   const safeIndex = ((index % total) + total) % total;
 
-  slides.forEach((slide, i) => {
-    slide.classList.toggle("active", i === safeIndex);
-  });
+  const mainImage = gallery.querySelector(".gallery-main-image");
+  const dots = gallery.querySelectorAll(".gallery-dot");
+
+  if (mainImage && imageUrls.length) {
+    const imageUrl = imageUrls[safeIndex];
+    mainImage.src = imageUrl;
+    mainImage.alt = `Image ${safeIndex + 1}`;
+    mainImage.style.display = "block";
+  }
 
   dots.forEach((dot, i) => {
     dot.classList.toggle("active", i === safeIndex);
@@ -467,6 +464,17 @@ function attachGalleryControls(popupElement) {
   const total = Number(gallery.dataset.total || 0);
   if (total <= 1) return;
 
+  const imageUrls = Array.from(gallery.querySelectorAll(".gallery-dot")).map(dot => dot.dataset.url || "").filter(Boolean);
+  if (!imageUrls.length) return;
+
+  gallery.querySelectorAll(".gallery-dot").forEach(dot => {
+    const dotUrl = dot.dataset.url || "";
+    if (!dotUrl) return;
+    dot.addEventListener("click", () => {
+      setGalleryIndex(gallery, Number(dot.dataset.index || 0));
+    });
+  });
+
   const prevBtn = popupElement.querySelector(".gallery-prev");
   const nextBtn = popupElement.querySelector(".gallery-next");
 
@@ -478,12 +486,6 @@ function attachGalleryControls(popupElement) {
   nextBtn?.addEventListener("click", () => {
     const current = Number(gallery.dataset.current || 0);
     setGalleryIndex(gallery, current + 1);
-  });
-
-  popupElement.querySelectorAll(".gallery-dot").forEach(dot => {
-    dot.addEventListener("click", () => {
-      setGalleryIndex(gallery, Number(dot.dataset.index || 0));
-    });
   });
 }
 // ===== PLACE DISPLAY =====
