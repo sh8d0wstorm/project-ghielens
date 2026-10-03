@@ -414,21 +414,15 @@ function buildGalleryHtml(imageUrls) {
   if (!imageUrls || imageUrls.length === 0) return "";
 
   const safeUrls = imageUrls.map(String);
-  const dots = safeUrls.map((_, index) => `
-    <button type="button" class="gallery-dot ${index === 0 ? "active" : ""}" data-index="${index}" aria-label="Go to image ${index + 1}"></button>
+  const dots = safeUrls.map((url, index) => `
+    <button type="button" class="gallery-dot ${index === 0 ? "active" : ""}" data-index="${index}" data-url="${url}" aria-label="Go to image ${index + 1}"></button>
   `).join("");
-
-  const arrows = safeUrls.length > 1 ? `
-    <button type="button" class="gallery-arrow gallery-prev" aria-label="Previous image">‹</button>
-    <button type="button" class="gallery-arrow gallery-next" aria-label="Next image">›</button>
-  ` : "";
 
   const urlsJson = JSON.stringify(safeUrls);
 
   return `
     <div class="image-gallery" data-current="0" data-total="${safeUrls.length}" data-urls='${urlsJson.replace(/'/g, "&apos;")}'>
       <img class="gallery-main-image" src="${safeUrls[0]}" alt="Image 1" onerror="this.style.display='none'">
-      ${arrows}
       <div class="gallery-dots">${dots}</div>
     </div>
   `;
@@ -493,19 +487,6 @@ function attachGalleryControls(popupElement) {
     dot.addEventListener("click", () => {
       setGalleryIndex(gallery, Number(dot.dataset.index || 0));
     });
-  });
-
-  const prevBtn = popupElement.querySelector(".gallery-prev");
-  const nextBtn = popupElement.querySelector(".gallery-next");
-
-  prevBtn?.addEventListener("click", () => {
-    const current = Number(gallery.dataset.current || 0);
-    setGalleryIndex(gallery, current - 1);
-  });
-
-  nextBtn?.addEventListener("click", () => {
-    const current = Number(gallery.dataset.current || 0);
-    setGalleryIndex(gallery, current + 1);
   });
 }
 // ===== PLACE DISPLAY =====
