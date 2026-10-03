@@ -118,6 +118,43 @@ body {
   box-sizing: border-box;
 }
 
+.image-gallery {
+  width: 100%;
+  position: relative;
+}
+
+.gallery-track {
+  position: relative;
+  width: 100%;
+}
+
+.gallery-slide {
+  display: none;
+  width: 100%;
+}
+
+.gallery-slide.active {
+  display: block;
+}
+
+.gallery-arrow,
+.gallery-dot {
+  cursor: pointer;
+}
+
+.gallery-dot {
+  border: 0;
+  width: 10px;
+  height: 10px;
+  background: #cfcfcf;
+  border-radius: 50%;
+  margin: 0 4px;
+}
+
+.gallery-dot.active {
+  background: #007bff;
+}
+
 .location-popup .popup-image,
 .marker-details img {
   width: 100%;
