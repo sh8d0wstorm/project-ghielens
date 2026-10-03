@@ -255,7 +255,7 @@ function loadPlaces() {
         lat,
         ing,
         description: data.description || "",
-        image: Array.isArray(data.image) ? data.image : normalizeImageList(data.image || data.images || data.img || ""),
+        image: sanitizeImageArray(data.image || data.images || data.img || ""),
         keyword: data.keyword || data.keywords || []
       });
 
@@ -356,29 +356,55 @@ function normalizeImageList(value) {
     .filter(item => item !== "");
 }
 
+function sanitizeImageArray(value) {
+  const images = normalizeImageList(value);
+
+  return images.filter(image => {
+    if (!image || typeof image !== "string") return false;
+
+    const trimmed = image.trim();
+    if (!trimmed) return false;
+
+    const isHttpUrl = /^https?:\/\//i.test(trimmed);
+    const isDataUrl = /^data:/i.test(trimmed);
+    const isBlobUrl = /^blob:/i.test(trimmed);
+    const isRelativeAsset = trimmed.startsWith("images/") || trimmed.startsWith("./") || trimmed.startsWith("/");
+    const isLocalFileUrl = /^file:\/\//i.test(trimmed) || /^[a-zA-Z]:[\\/]/.test(trimmed);
+
+    if (isHttpUrl || isDataUrl || isBlobUrl || isRelativeAsset) {
+      return true;
+    }
+
+    if (isLocalFileUrl) {
+      console.warn("Ignoring local file URL in saved image data:", trimmed);
+      return false;
+    }
+
+    console.warn("Ignoring unsupported image value in saved image data:", trimmed);
+    return false;
+  });
+}
+
 function getImagesForPlace(place) {
   if (!place) return [];
 
   const rawImages = place.images || place.image || place.img || [];
-  const images = normalizeImageList(rawImages);
+  const images = sanitizeImageArray(rawImages);
 
-  return images.map(image => {
-    // Already a complete URL
-    if (/^(https?:)?\/\//i.test(image)) {
-      return image;
+  return images.filter(image => {
+    const trimmed = String(image).trim();
+    if (!trimmed) return false;
+
+    if (/^https?:\/\//i.test(trimmed) || /^data:/i.test(trimmed) || /^blob:/i.test(trimmed)) {
+      return true;
     }
 
-    // Local paths
-    if (
-      image.startsWith("images/") ||
-      image.startsWith("./") ||
-      image.startsWith("/")
-    ) {
-      return image;
+    if (trimmed.startsWith("images/") || trimmed.startsWith("./") || trimmed.startsWith("/")) {
+      return true;
     }
 
-    // Filename stored in Firebase
-    return `${photoFolderUrl}/${encodeURIComponent(image)}`;
+    console.warn("Dropping invalid image reference before gallery render:", trimmed);
+    return false;
   });
 }
 
@@ -474,6 +500,7 @@ function showDetails(place) {
 
   activePlace = place;
   const imageUrls = getImagesForPlace(place);
+  console.info(`Showing details for ${place.name} with ${imageUrls.length} valid image URL(s):`, imageUrls);
 
   if (place.marker) {
     // Keep the marker centered when opening details
@@ -481,15 +508,15 @@ function showDetails(place) {
       map.setView([place.lat, place.ing], 17);
     }
 
-    const imagesHtml = imageUrls.length
-      ? imageUrls.map(url => `<img src="${url}" class="popup-image" onerror="this.style.display='none'">`).join("")
+    const directImagesHtml = imageUrls.length
+      ? imageUrls.map(url => `<img src="${url}" class="popup-image" alt="${place.name}" onerror="this.style.display='none'">`).join("")
       : "";
 
     const popupContent = `
       <div class="location-popup">
         <h3>${place.name}</h3>
 
-        ${buildGalleryHtml(imageUrls)}
+        ${buildGalleryHtml(imageUrls) || `<div class="detail-image-stack">${directImagesHtml}</div>`}
 
         <p>${place.description || ""}</p>
 
@@ -904,7 +931,7 @@ window.addEventListener("load", () => {
           if (data.name) {
             existingPlaces.set(normalizeAddressKey(data.name), {
               id: docSnap.id,
-              image: normalizeImageList(data.image || data.images || data.img || "")
+              image: sanitizeImageArray(data.image || data.images || data.img || "")
             });
           }
         });
@@ -938,10 +965,12 @@ window.addEventListener("load", () => {
             }
             for (const picture of rowImages) {
               try {
-                imageUrls.push(await uploadImageToSupabase(picture));
+                const publicUrl = await uploadImageToSupabase(picture);
+                imageUrls.push(publicUrl);
+                console.info(`✅ Upload succeeded for ${address}: ${picture.name} -> ${publicUrl}`);
               } catch (uploadError) {
                 imageErrorCount++;
-                console.error(`Supabase upload failed for ${address} (${picture.name}):`, uploadError);
+                console.error(`❌ Supabase upload failed for ${address} (${picture.name}):`, uploadError);
               }
             }
 
@@ -955,9 +984,11 @@ window.addEventListener("load", () => {
             };
             const normalizedAddress = normalizeAddressKey(address);
             const existingPlace = existingPlaces.get(normalizedAddress);
+            const existingImages = sanitizeImageArray(existingPlace ? existingPlace.image : []);
+            const mergedImages = [...new Set([...existingImages, ...imageUrls])];
 
             if (existingPlace) {
-              place.image = [...new Set([...existingPlace.image, ...imageUrls])];
+              place.image = mergedImages;
             } else {
               place.image = imageUrls;
             }
@@ -966,15 +997,21 @@ window.addEventListener("load", () => {
               if (existingPlace) {
                 await updateDoc(doc(db, "places", existingPlace.id), place);
                 existingPlace.image = place.image;
+                console.info(`✅ Saved ${place.image.length} image URL(s) to Firestore for ${address}: ${place.image.join(", ")}`);
               } else {
                 const docRef = await addDoc(collection(db, "places"), place);
-                existingPlaces.set(normalizedAddress, { id: docRef.id, image: imageUrls });
+                existingPlaces.set(normalizedAddress, { id: docRef.id, image: place.image });
+                console.info(`✅ Added new Firestore place ${address} with ${place.image.length} image URL(s): ${place.image.join(", ")}`);
               }
             } catch (saveError) {
               errorCount++;
               firestoreSaveErrorCount++;
-              console.error(`Firestore save failed for ${address}:`, saveError);
+              console.error(`❌ Firestore save failed for ${address}:`, saveError);
               continue;
+            }
+
+            if (imageUrls.length === 0) {
+              console.warn(`⚠️ No valid image URL(s) were uploaded for ${address}; the place was still saved without new photos.`);
             }
 
             successCount++;
@@ -1006,7 +1043,10 @@ window.addEventListener("load", () => {
         if (firestoreSaveErrorCount) {
           importWarnings.push(`${firestoreSaveErrorCount} Firestore save(s) failed. See the browser console for the affected addresses and errors.`);
         }
-        if (importWarnings.length) {
+        if (successCount) {
+          console.info(`✅ Excel import finished: ${successCount} address row(s) saved successfully.`);
+        }
+        if (imageErrorCount || firestoreSaveErrorCount || importWarnings.length) {
           alert(`Imported ${successCount} address row(s). ${importWarnings.join(" ")}`);
         }
       }
