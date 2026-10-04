@@ -521,10 +521,6 @@ function showDetails(place) {
       </div>
     `;
 
-    place.marker
-      .bindPopup(popupContent)
-      .openPopup();
-
     place.marker.once("popupopen", () => {
       const popup = place.marker.getPopup().getElement();
 
@@ -547,6 +543,13 @@ function showDetails(place) {
         });
       }
     });
+
+    // Register the popup handler before opening it. Leaflet can fire
+    // `popupopen` immediately, so registering afterward leaves the gallery
+    // dots visible but without click handlers.
+    place.marker
+      .bindPopup(popupContent)
+      .openPopup();
   }
 
   // Details should only appear in the map popup; the sidebar detail panel stays empty.
