@@ -1129,15 +1129,18 @@ window.closeEditModal = closeEditModal;
 window.login = login;
 window.logout = logout;
 
-const toggleSearch = document.getElementById("toggle-search");
-const searchContent = document.getElementById("search-content");
+const sidebar = document.getElementById("sidebar");
+const toggleSidebar = document.getElementById("toggle-sidebar");
 
-toggleSearch.addEventListener("click", () => {
-    const isHidden = searchContent.classList.toggle("hidden");
+toggleSidebar.addEventListener("click", () => {
+    const isCollapsed = sidebar.classList.toggle("collapsed");
 
-    toggleSearch.textContent = isHidden
-        ? "🔎 Zoeken ▲"
-        : "🔎 Zoeken ▼";
+    toggleSidebar.textContent = isCollapsed
+        ? "▲ Toon menu"
+        : "▼ Verberg menu";
 
-    toggleSearch.setAttribute("aria-expanded", String(!isHidden));
+    toggleSidebar.setAttribute(
+        "aria-expanded",
+        String(!isCollapsed)
+    );
 });

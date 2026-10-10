@@ -28,23 +28,6 @@ body {
   margin-bottom: 10px;
   box-sizing: border-box;
 }
-/* COLLAPSIBLE SEARCH PANEL */
-
-#search-panel {
-    width: 100%;
-}
-
-#toggle-search {
-    width: 100%;
-    padding: 10px;
-    margin-bottom: 8px;
-    cursor: pointer;
-}
-
-#search-content.hidden {
-    display: none;
-}
-
 /* MAP AREA */
 #map {
   flex: 1;
@@ -194,4 +177,27 @@ body {
   max-width: 100%;
   height: auto;
   display: block;
+}
+/* COLLAPSIBLE SIDEBAR */
+
+#toggle-sidebar {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    cursor: pointer;
+}
+
+@media (max-width: 480px) {
+    #sidebar.collapsed {
+        height: auto;
+        padding: 5px;
+    }
+
+    #sidebar.collapsed > :not(#toggle-sidebar) {
+        display: none;
+    }
+
+    #sidebar.collapsed #toggle-sidebar {
+        margin-bottom: 0;
+    }
 }
