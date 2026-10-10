@@ -28,6 +28,22 @@ body {
   margin-bottom: 10px;
   box-sizing: border-box;
 }
+/* COLLAPSIBLE SEARCH PANEL */
+
+#search-panel {
+    width: 100%;
+}
+
+#toggle-search {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 8px;
+    cursor: pointer;
+}
+
+#search-content.hidden {
+    display: none;
+}
 
 /* MAP AREA */
 #map {

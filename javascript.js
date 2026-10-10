@@ -1128,3 +1128,16 @@ window.confirmEdit = confirmEdit;
 window.closeEditModal = closeEditModal;
 window.login = login;
 window.logout = logout;
+
+const toggleSearch = document.getElementById("toggle-search");
+const searchContent = document.getElementById("search-content");
+
+toggleSearch.addEventListener("click", () => {
+    const isHidden = searchContent.classList.toggle("hidden");
+
+    toggleSearch.textContent = isHidden
+        ? "🔎 Zoeken ▲"
+        : "🔎 Zoeken ▼";
+
+    toggleSearch.setAttribute("aria-expanded", String(!isHidden));
+});
