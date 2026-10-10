@@ -1135,12 +1135,14 @@ const toggleSidebar = document.getElementById("toggle-sidebar");
 toggleSidebar.addEventListener("click", () => {
     const isCollapsed = sidebar.classList.toggle("collapsed");
 
-    toggleSidebar.textContent = isCollapsed
-        ? "▲ Toon menu"
-        : "▼ Verberg menu";
-
+    toggleSidebar.textContent = isCollapsed ? "▶" : "◀";
+    toggleSidebar.setAttribute("aria-expanded", String(!isCollapsed));
     toggleSidebar.setAttribute(
-        "aria-expanded",
-        String(!isCollapsed)
+        "aria-label",
+        isCollapsed ? "Menu openen" : "Menu verbergen"
     );
+
+    if (window.innerWidth > 480) {
+        toggleSidebar.style.left = isCollapsed ? "0" : "250px";
+    }
 });
