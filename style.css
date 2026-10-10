@@ -210,8 +210,8 @@ body {
     }
 
     #sidebar.collapsed {
-        display: none;
-    }
+    display: none !important;
+}
 
     #container {
         position: relative;
