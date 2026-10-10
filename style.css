@@ -200,6 +200,14 @@ body {
     font-size: 18px;
 }
 
+  #sidebar.collapsed {
+    width: 0;
+    height: 0;
+    flex: 0 0 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
 @media (max-width: 480px) {
     #toggle-sidebar {
         left: auto;
@@ -208,10 +216,6 @@ body {
         bottom: 50%;
         transform: translateY(50%);
     }
-
-    #sidebar.collapsed {
-    display: none !important;
-}
 
     #container {
         position: relative;
