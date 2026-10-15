@@ -29,72 +29,72 @@
       search + list + admin tools
     ========================== -->
     <div id="sidebar">
-     <button id="toggle-sidebar"
+    <button id="toggle-sidebar"
         type="button"
         aria-label="Menu verbergen"
         aria-expanded="true">
     ◀
 </button>
 
-   <!-- =========================
-     ➕ ADD LOCATION MODAL
-   ========================== -->
-   <div id="addModal" style="display:none; position:fixed; top:20%; left:50%; transform:translateX(-50%); background:white; padding:20px; border:1px solid #ccc; z-index:9999; width:300px;">
+  <!-- =========================
+    ➕ ADD LOCATION MODAL
+  ========================== -->
+  <div id="addModal" style="display:none; position:fixed; top:20%; left:50%; transform:translateX(-50%); background:white; padding:20px; border:1px solid #ccc; z-index:9999; width:300px;">
 
-     <h3>Add Location</h3>
+    <h3>Add Location</h3>
 
-     <input id="m_name" placeholder="Naam"><br><br>
-     <input id="m_lat" placeholder="Latitude"><br><br>
-     <input id="m_ing" placeholder="Longitude"><br><br>
-     <input id="m_desc" placeholder="Beschrijving"><br><br>
-     <input id="m_img" placeholder="Image URL"><br><br>
-     <input id="m_keywords" placeholder="Keywords (komma)"><br><br>
+    <input id="m_name" placeholder="Naam"><br><br>
+    <input id="m_lat" placeholder="Latitude"><br><br>
+    <input id="m_ing" placeholder="Longitude"><br><br>
+    <input id="m_desc" placeholder="Beschrijving"><br><br>
+    <input id="m_img" placeholder="Image URL"><br><br>
+    <input id="m_keywords" placeholder="Keywords (komma)"><br><br>
 
-     <button onclick="confirmAdd()">➕</button>
-     <button onclick="closeAddModal()">❌</button>
+    <button onclick="confirmAdd()">➕</button>
+    <button onclick="closeAddModal()">❌</button>
 
-   </div>
+  </div>
 
-   <!-- =========================
-     ✏️ EDIT LOCATION MODAL
-   ========================== -->
-   <div id="editModal" style="display:none;">
+  <!-- =========================
+    ✏️ EDIT LOCATION MODAL
+  ========================== -->
+  <div id="editModal" style="display:none;">
 
-     <input id="e_name" placeholder="Name">
-     <input id="e_lat" placeholder="Latitude">
-     <input id="e_ing" placeholder="Longitude">
-     <input id="e_desc" placeholder="Description">
-     <input id="e_img" placeholder="Image URL">
-     <input id="e_keywords" placeholder="Keywords (comma)">
-     
-     <button onclick="confirmEdit()">💾</button>
-     <button onclick="closeEditModal()">❌</button>
-   </div>
+    <input id="e_name" placeholder="Name">
+    <input id="e_lat" placeholder="Latitude">
+    <input id="e_ing" placeholder="Longitude">
+    <input id="e_desc" placeholder="Description">
+    <input id="e_img" placeholder="Image URL">
+    <input id="e_keywords" placeholder="Keywords (comma)">
+    
+    <button onclick="confirmEdit()">💾</button>
+    <button onclick="closeEditModal()">❌</button>
+  </div>
 
-   <!-- =========================
- 🔎 SEARCH BAR
-   ========================== -->
+  <!-- =========================
+🔎 SEARCH BAR
+  ========================== -->
     <input id="search" placeholder="Zoek een plek...">
 
     <!-- ======================
-     🔐 AUTH FORM
-   ========================== -->
-   <div id="loginForm">
-     <input type="password" id="password" placeholder="Wachtwoord" />
-     <button id="loginBtn" type="button" onclick="login()">🔓</button>
-   </div>
-   <button id="logoutBtn" onclick="logout()" style="display:none;">🔒</button>
+    🔐 AUTH FORM
+  ========================== -->
+  <div id="loginForm">
+    <input type="password" id="password" placeholder="Wachtwoord" />
+    <button id="loginBtn" type="button" onclick="login()">🔓</button>
+  </div>
+  <button id="logoutBtn" onclick="logout()" style="display:none;">🔒</button>
 
-   <!-- =========================
-     ➕ ADD BUTTON (admin only)
-   ========================== -->
-   <button id="addBtn">➕</button>
+  !-- =========================
+    ➕ ADD BUTTON (admin only)
+  ========================== -->
+  <button id="addBtn">➕</button>
   <button id="pickMapBtn">📍</button>
-   <!-- =========================
-     📍 PLACE LIST + DETAILS
-   ========================== -->
-   <div id="list"></div>
-   <div id="details"></div>
+  <!-- =========================
+    📍 PLACE LIST + DETAILS
+  ========================== -->
+  <div id="list"></div>
+  <div id="details"></div>
 
     </div>
 

@@ -345,7 +345,8 @@ document.getElementById("locateMe").addEventListener("click", function () {
 
                 myLocationCircle = L.circle(location, {
                     radius: accuracy,
-                    color: "#1677ff",
+                    color: "#d32f2f",
+                    fillColor: "#f44336",
                     fillOpacity: 0.12
                 }).addTo(map);
 
