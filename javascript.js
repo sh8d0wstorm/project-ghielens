@@ -1053,7 +1053,6 @@ window.addEventListener("load", () => {
             const descriptionKey = headerNames.find(header => ["description", "beschrijving", "omschrijving"].includes(header));
             const place = {
               name: address,
-              keyword: [],
               description: descriptionKey ? row[descriptionKey] || "" : "",
               lat: parseCoord(coordinates.lat),
               ing: parseCoord(coordinates.ing)
