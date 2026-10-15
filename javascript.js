@@ -315,6 +315,68 @@ map.on("click", function(e) {
 
   isAdding = false;
 });
+
+let myLocationMarker = null;
+let myLocationCircle = null;
+let locationWatcher = null;
+
+document.getElementById("locateMe").addEventListener("click", function () {
+    if (!navigator.geolocation) {
+        alert("Your browser does not support location sharing.");
+        return;
+    }
+
+    if (locationWatcher !== null) {
+        navigator.geolocation.clearWatch(locationWatcher);
+    }
+
+    locationWatcher = navigator.geolocation.watchPosition(
+        function (position) {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            const accuracy = position.coords.accuracy;
+            const location = [lat, lng];
+
+            if (!myLocationMarker) {
+                myLocationMarker = L.marker(location)
+                    .addTo(map)
+                    .bindPopup("You are here")
+                    .openPopup();
+
+                myLocationCircle = L.circle(location, {
+                    radius: accuracy,
+                    color: "#1677ff",
+                    fillOpacity: 0.12
+                }).addTo(map);
+
+                map.setView(location, 16);
+            } else {
+                myLocationMarker.setLatLng(location);
+                myLocationCircle.setLatLng(location);
+                myLocationCircle.setRadius(accuracy);
+            }
+        },
+        function (error) {
+            if (error.code === 1) {
+                alert("Please allow location access in your browser.");
+            } else if (error.code === 2) {
+                alert("Your location is currently unavailable.");
+            } else {
+                alert("Getting your location took too long. Please try again.");
+            }
+
+            if (locationWatcher !== null) {
+                navigator.geolocation.clearWatch(locationWatcher);
+                locationWatcher = null;
+            }
+        },
+        {
+            enableHighAccuracy: true,
+            maximumAge: 5000,
+            timeout: 15000
+        }
+    );
+});
 // ===== UI ELEMENTS =====
 const listContainer = document.getElementById("list");
 const detailsContainer = document.getElementById("details");
