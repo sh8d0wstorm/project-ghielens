@@ -9,7 +9,10 @@ with check (
   and (storage.foldername(name))[1] = 'places'
   and auth.jwt() ->> 'iss' = 'https://securetoken.google.com/project-ghielens'
   and auth.jwt() ->> 'aud' = 'project-ghielens'
-  and auth.jwt() ->> 'email' = 'juno.denis2008@gmail.com'
+  and lower(coalesce(auth.jwt() ->> 'email', '')) in (
+    'juno.denis2008@gmail.com',
+    'katrin@ghielensnv.be'
+  )
 );
 
 select id, name, public, file_size_limit, allowed_mime_types
