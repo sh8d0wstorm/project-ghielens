@@ -225,16 +225,22 @@ body {
     position: relative;
 }
 
+
 #locateMe {
     position: absolute;
     top: 12px;
     right: 12px;
     z-index: 2000;
     padding: 10px 12px;
-    background: white;
-    color: black;
-    border: 1px solid #ccc;
+    background: #d32f2f;
+    color: white;
+    border: 1px solid #b71c1c;
     border-radius: 6px;
     cursor: pointer;
     display: block;
+    font-weight: bold;
+}
+
+#locateMe:hover {
+    background: #b71c1c;
 }
