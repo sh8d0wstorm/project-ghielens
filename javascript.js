@@ -903,46 +903,22 @@ searchInput.addEventListener("input", () => {
 });
 // ===== LOGIN SYSTEM =====
 
-a
 async function login() {
   const password = document.getElementById("password").value;
 
-  // Try your account first
-  const accounts = [
-  "juno.denis2008@gmail.com",
-  "katrin@ghielensnv.be"
-];
-
   try {
-    let loggedIn = false;
-
-    for (const email of accounts) {
-      try {
-        await signInWithEmailAndPassword(auth, email, password);
-        loggedIn = true;
-        break;
-      } catch (error) {
-        if (
-          error.code !== "auth/invalid-credential" &&
-          error.code !== "auth/wrong-password" &&
-          error.code !== "auth/user-not-found"
-        ) {
-          throw error;
-        }
-      }
-    }
-
-    if (!loggedIn) {
-      alert("Onjuist wachtwoord.");
-      return;
-    }
+    await signInWithEmailAndPassword(
+      auth,
+      "juno.denis2008@gmail.com",
+      password
+    );
 
     adminMode = true;
     updateUI();
 
   } catch (error) {
     console.error("Firebase login error:", error);
-    alert("Inloggen mislukt. Probeer opnieuw.");
+    alert("Onjuist wachtwoord.");
   }
 }
 
