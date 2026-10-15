@@ -85,7 +85,7 @@ let isAdding = false;    // future: add-mode state
 let editingPlace = null; // currently edited place
 let places = [];
 let fuse; // declare first
-let isImporting = false; // prevent snsapshot updates during import
+let isImporting = false; // prevent snapshot updates during import
 
 const photoFolderUrl = "file:///C:/Users/junoz/OneDrive%20-%20Ghielens/data/100%20jaar/aaa";
 
@@ -299,26 +299,36 @@ markers.push(marker);
 }
 
 // ===== MAP =====
+
 const map = L.map('map').setView([51.2194, 4.4025], 13);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap contributors'
+    attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
 map.on("click", function(e) {
-  if (!adminMode || !isAdding) return;
+    if (!adminMode || !isAdding) return;
 
-  document.getElementById("m_lat").value = e.latlng.lat;
-  document.getElementById("m_ing").value = e.latlng.lng;
+    document.getElementById("m_lat").value = e.latlng.lat;
+    document.getElementById("m_ing").value = e.latlng.lng;
+    document.getElementById("addModal").style.display = "block";
 
-  document.getElementById("addModal").style.display = "block";
-
-  isAdding = false;
+    isAdding = false;
 });
 
 let myLocationMarker = null;
 let myLocationCircle = null;
 let locationWatcher = null;
+
+// Red version of the original Leaflet pin
+const redLocationIcon = L.icon({
+    iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png",
+    shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+});
 
 document.getElementById("locateMe").addEventListener("click", function () {
     if (!navigator.geolocation) {
@@ -326,7 +336,10 @@ document.getElementById("locateMe").addEventListener("click", function () {
         return;
     }
 
-    
+    if (locationWatcher !== null) {
+        navigator.geolocation.clearWatch(locationWatcher);
+    }
+
     locationWatcher = navigator.geolocation.watchPosition(
         function (position) {
             const lat = position.coords.latitude;
@@ -334,20 +347,12 @@ document.getElementById("locateMe").addEventListener("click", function () {
             const accuracy = position.coords.accuracy;
             const location = [lat, lng];
 
-            const popupContent = `
-                <div style="color: black; background: white;">
-                    You are here<br>
-                    Accuracy radius: ±${Math.round(accuracy)} metres
-                </div>
-            `;
+            const popupContent =
+                `You are here<br>Accuracy radius: ±${Math.round(accuracy)} metres`;
 
             if (!myLocationMarker) {
-                myLocationMarker = L.circleMarker(location, {
-                    radius: 5,
-                    color: "#b71c1c",
-                    fillColor: "#f44336",
-                    fillOpacity: 1,
-                    weight: 2
+                myLocationMarker = L.marker(location, {
+                    icon: redLocationIcon
                 }).addTo(map);
 
                 myLocationMarker
