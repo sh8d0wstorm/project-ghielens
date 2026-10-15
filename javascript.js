@@ -262,7 +262,7 @@ function loadPlaces() {
       // Render Leaflet marker safely if coordinate data evaluates successfully
       if (place.lat !== null && place.ing !== null) {
           // Leaflet expects [latitude, longitude]
-         const marker = L.marker([place.lat, place.ing])
+        const marker = L.marker([place.lat, place.ing])
   .addTo(map);
 
 place.marker = marker;
@@ -326,10 +326,7 @@ document.getElementById("locateMe").addEventListener("click", function () {
         return;
     }
 
-    if (locationWatcher !== null) {
-        navigator.geolocation.clearWatch(locationWatcher);
-    }
-
+    
     locationWatcher = navigator.geolocation.watchPosition(
         function (position) {
             const lat = position.coords.latitude;
@@ -337,19 +334,25 @@ document.getElementById("locateMe").addEventListener("click", function () {
             const accuracy = position.coords.accuracy;
             const location = [lat, lng];
 
-            if (!myLocationMarker) {
-                
-        myLocationMarker = L.circleMarker(location, {
-            radius: 9,
-            color: "#b71c1c",
-            fillColor: "#f44336",
-            fillOpacity: 1,
-            weight: 3
-        }).addTo(map);
+            const popupContent = `
+                <div style="color: black; background: white;">
+                    You are here<br>
+                    Accuracy radius: ±${Math.round(accuracy)} metres
+                </div>
+            `;
 
-        myLocationMarker
-            .bindPopup(`You are here<br>Accuracy radius: ±${Math.round(accuracy)} metres`)
-            .openPopup();
+            if (!myLocationMarker) {
+                myLocationMarker = L.circleMarker(location, {
+                    radius: 5,
+                    color: "#b71c1c",
+                    fillColor: "#f44336",
+                    fillOpacity: 1,
+                    weight: 2
+                }).addTo(map);
+
+                myLocationMarker
+                    .bindPopup(popupContent)
+                    .openPopup();
 
                 myLocationCircle = L.circle(location, {
                     radius: accuracy,
@@ -361,6 +364,8 @@ document.getElementById("locateMe").addEventListener("click", function () {
                 map.setView(location, 16);
             } else {
                 myLocationMarker.setLatLng(location);
+                myLocationMarker.setPopupContent(popupContent);
+
                 myLocationCircle.setLatLng(location);
                 myLocationCircle.setRadius(accuracy);
             }
