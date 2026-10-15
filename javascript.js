@@ -338,10 +338,18 @@ document.getElementById("locateMe").addEventListener("click", function () {
             const location = [lat, lng];
 
             if (!myLocationMarker) {
-                myLocationMarker = L.marker(location)
-                    .addTo(map)
-                    .bindPopup("You are here")
-                    .openPopup();
+                
+        myLocationMarker = L.circleMarker(location, {
+            radius: 9,
+            color: "#b71c1c",
+            fillColor: "#f44336",
+            fillOpacity: 1,
+            weight: 3
+        }).addTo(map);
+
+        myLocationMarker
+            .bindPopup(`You are here<br>Accuracy radius: ±${Math.round(accuracy)} metres`)
+            .openPopup();
 
                 myLocationCircle = L.circle(location, {
                     radius: accuracy,
