@@ -1,18 +1,18 @@
-   /* BASIC PAGE LAYOUT */
+/* ===== BASIC PAGE LAYOUT ===== */
 body {
   margin: 0;
   font-family: Arial, sans-serif;
   background-color: #f9f9f9;
 }
 
-/* CONTAINER: sidebar + map side by side */
+/* ===== CONTAINER: SIDEBAR AND MAP ===== */
 #container {
   display: flex;
   height: 100vh;
   width: 100%;
 }
 
-/* LEFT SIDEBAR */
+/* ===== LEFT SIDEBAR ===== */
 #sidebar {
   width: 250px;
   background: #f4f4f4;
@@ -21,14 +21,14 @@ body {
   box-sizing: border-box;
 }
 
-/* SEARCH BAR */
+/* ===== SEARCH BAR ===== */
 #search {
   width: 100%;
   padding: 8px;
   margin-bottom: 10px;
   box-sizing: border-box;
 }
-/* MAP AREA */
+/* ===== MAP AREA ===== */
 #map {
   flex: 1;
   height: 100%;
@@ -39,12 +39,12 @@ body {
   box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
 
-/* LIST */
+/* ===== PLACE LIST ===== */
 #list {
   display: block;
 }
 
-/* DETAILS */
+/* ===== PLACE DETAILS ===== */
 #details {
   display: block;
   width: 500px;
@@ -54,7 +54,7 @@ body {
   box-sizing: border-box;
 }
 
-/* STATUS */
+/* ===== STATUS ===== */
 #status {
   font-weight: bold;
   color: #555;
@@ -62,13 +62,13 @@ body {
   margin-bottom: 15px;
 }
 
-/* FILE INPUT */
+/* ===== FILE INPUT ===== */
 #excel-file {
   display: block;
   margin-top: 12px;
 }
 
-/* RESET BUTTON */
+/* ===== RESET BUTTON ===== */
 #resetBtn {
   display: inline-block;
   padding: 8px 12px;
@@ -85,7 +85,7 @@ body {
   filter: brightness(0.95);
 }
 
-/* UTILITY */
+/* ===== UTILITY CLASSES ===== */
 .hidden {
   display: none !important;
 }
@@ -94,7 +94,7 @@ body {
   color: #777;
 }
 
-/* MOBILE */
+/* ===== MOBILE LAYOUT ===== */
 @media (max-width: 480px) {
   #container {
     flex-direction: column;
@@ -110,7 +110,7 @@ body {
   }
 }
 
-/* Popup / details images */
+/* ===== POPUP AND DETAILS IMAGES ===== */
 .location-popup,
 .marker-details {
   max-width: 360px;
@@ -172,13 +172,13 @@ body {
   object-fit: cover;
 }
 
-/* Ensure details panel images don't overflow */
+/* ===== DETAILS IMAGE SIZING ===== */
 #details img {
   max-width: 100%;
   height: auto;
   display: block;
 }
-/* SIDEBAR TOGGLE */
+/* ===== SIDEBAR TOGGLE ===== */
 
 #container {
     position: relative;
@@ -190,14 +190,14 @@ body {
     top: 50%;
     left: 250px;
     transform: translateY(-50%);
-    width: 28px;
-    height: 54px;
+    width: 40px;
+    height: 72px;
     padding: 0;
     border: 1px solid #ccc;
     border-radius: 0 8px 8px 0;
     background: white;
     cursor: pointer;
-    font-size: 24px;
+    font-size: 36px;
 }
 
   #sidebar.collapsed {
@@ -231,7 +231,7 @@ body {
     top: 12px;
     right: 12px;
     z-index: 2000;
-    padding: 10px 12px;
+    padding: 14px 20px;
     background: white;
     color: black;
     border: 1px solid #ccc;
@@ -239,6 +239,7 @@ body {
     cursor: pointer;
     display: block;
     font-weight: bold;
+    font-size: 16px;
 }
 
 #locateMe:hover {

@@ -16,6 +16,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// ===== DUPLICATE PLACE CLEANUP =====
 async function removeDuplicatePlaces() {
   console.log("🧹 STARTING DUPLICATE CLEANUP...");
 
@@ -89,7 +90,7 @@ let isImporting = false; // prevent snapshot updates during import
 
 const photoFolderUrl = "file:///C:/Users/junoz/OneDrive%20-%20Ghielens/data/100%20jaar/aaa";
 
-// ===== DATA =====
+// ===== DATA AND SERVICE CONFIGURATION =====
 const firebaseConfig = {
   apiKey: "AIzaSyDX-AIGkfhSEfBRDt-SRrJyVWRlmtxs7qE",
   authDomain: "project-ghielens.firebaseapp.com",
@@ -111,6 +112,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   }
 });
 console.log(app.options.projectId, "Firestore database: default");
+
+// ===== FUZZY SEARCH SETUP =====
 function initFuse() {
   fuse = new Fuse(places, {
     keys: ["name", "keyword", "latString", "ingString"],
@@ -119,6 +122,7 @@ function initFuse() {
   });
 }
 
+// ===== COORDINATE NORMALIZATION AND EXTRACTION =====
 function normalizePlaceCoordinates(place) {
   place.lat = parseCoord(place.lat);
   place.ing = parseCoord(place.ing);
@@ -212,6 +216,7 @@ function extractLatLngFromRow(row) {
   return { lat: null, ing: null };
 }
 
+// ===== FIRESTORE PLACE SYNC =====
 function loadPlaces() {
   console.log("Loading places...");
   console.log("🔥 loadPlaces() CALLED");
@@ -298,8 +303,7 @@ markers.push(marker);
   });
 }
 
-// ===== MAP =====
-
+// ===== MAP SETUP =====
 const map = L.map('map').setView([51.2194, 4.4025], 13);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -316,6 +320,7 @@ map.on("click", function(e) {
     isAdding = false;
 });
 
+// ===== CURRENT LOCATION =====
 let myLocationMarker = null;
 let myLocationCircle = null;
 let locationWatcher = null;
@@ -401,7 +406,7 @@ const listContainer = document.getElementById("list");
 const detailsContainer = document.getElementById("details");
 const searchInput = document.getElementById("search");
 
-// ===== FUNCTIONS =====
+// ===== IMAGE URL NORMALIZATION =====
 function normalizeImageList(value) {
   if (!value) return [];
 
@@ -491,6 +496,7 @@ function getImagesForPlace(place) {
 
 console.log("getImagesForPlace() function defined.");
 
+// ===== IMAGE GALLERY =====
 function buildGalleryHtml(imageUrls) {
   if (!imageUrls || imageUrls.length === 0) return "";
 
@@ -561,7 +567,7 @@ function attachGalleryControls(popupElement) {
     };
   });
 }
-// ===== PLACE DISPLAY =====
+// ===== PLACE DETAILS DISPLAY =====
 function showDetails(place) {
   if (activePlace === place) {
     activePlace = null;
@@ -636,7 +642,7 @@ function showDetails(place) {
   // Details should only appear in the map popup; the sidebar detail panel stays empty.
   detailsContainer.innerHTML = "";
 }
-// ===== ADD LOCATION =====
+// ===== ADD LOCATION MODAL =====
 function startAddLocation() {
   if (!adminMode) return;
   document.getElementById("addModal").style.display = "block";
@@ -700,7 +706,8 @@ function clearDetails() {
   detailsContainer.innerHTML = "";
   activePlace = null;
 }
-// ===== ADMIN EDITING =====
+
+// ===== ADMIN PLACE MANAGEMENT =====
 function editLocation(place) {
   editingPlace = place;
 
@@ -755,6 +762,7 @@ function deleteLocation(place) {
   });
 }
 
+// ===== ADMIN UI =====
 function updateUI() {
   const addBtn = document.getElementById("addBtn");
   const excelFile = document.getElementById("excelFile");
@@ -790,6 +798,7 @@ function updateUI() {
   }
 }
 
+// ===== PLACE LIST RENDERING =====
 function renderPlaces(list) {
   console.log(
     "renderPlaces called with:",
@@ -898,10 +907,11 @@ function searchPlaces(query) {
   renderPlaces(result.map(r => r.item));
 }
 
+// Refresh the visible places as the user types.
 searchInput.addEventListener("input", () => {
   searchPlaces(searchInput.value);
 });
-// ===== LOGIN SYSTEM =====
+// ===== ADMIN AUTHENTICATION =====
 
 async function login() {
   const password = document.getElementById("password").value;
@@ -928,6 +938,7 @@ async function logout() {
   updateUI();
 }
 
+// ===== SUPABASE IMAGE STORAGE =====
 async function uploadImageToSupabase(image) {
   if (!auth.currentUser) {
     throw new Error("Sign in with the Firebase admin account before uploading pictures.");
@@ -956,6 +967,7 @@ function normalizeAddressKey(address) {
   return String(address || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+// ===== EXCEL WORKBOOK IMPORT =====
 window.addEventListener("load", () => {
   const excelFileInput = document.getElementById("excelFile");
   if (!excelFileInput) return;
@@ -977,6 +989,7 @@ window.addEventListener("load", () => {
       let extractedImageCount = null;
 
       try {
+        // Read worksheet rows and extract embedded pictures from the same workbook.
         const workbookBytes = new Uint8Array(loadEvent.target.result);
         const workbook = XLSX.read(workbookBytes, { type: "array" });
         const firstSheetName = workbook.SheetNames[0];
@@ -1002,6 +1015,7 @@ window.addEventListener("load", () => {
         const existingSnapshot = await getDocs(collection(db, "places"));
         const existingPlaces = new Map();
 
+        // Index saved places by normalized address to update matches instead of duplicating them.
         existingSnapshot.docs.forEach(docSnap => {
           const data = docSnap.data();
           if (data.name) {
@@ -1026,12 +1040,14 @@ window.addEventListener("load", () => {
           row.name = address;
 
           try {
+            // Use coordinates from the worksheet when available; geocode the address otherwise.
             let coordinates = extractLatLngFromRow(row);
             if (coordinates.lat == null || coordinates.ing == null) {
               const geocoded = await geocodeAddress(address);
               if (geocoded) coordinates = geocoded;
             }
 
+            // Associate extracted pictures with this worksheet row and upload them to storage.
             const imageUrls = [];
             const worksheetRow = rowNumber + sheetRowOffset;
             const rowImages = imagesByRow.get(worksheetRow) || [];
@@ -1040,6 +1056,7 @@ window.addEventListener("load", () => {
               console.info(`Mapped ${rowImages.length} workbook image(s) from worksheet row ${worksheetRow + 1} to ${address}.`);
             }
             for (const picture of rowImages) {
+              // Preserve existing photos when updating a place, and create a record for new addresses.
               try {
                 const publicUrl = await uploadImageToSupabase(picture);
                 imageUrls.push(publicUrl);
@@ -1102,6 +1119,7 @@ window.addEventListener("load", () => {
         console.error("Workbook import failed:", error);
         alert(`Workbook import failed: ${error.message}`);
       } finally {
+        // Resume live rendering and report the import outcome, including partial failures.
         isImporting = false;
         await loadPlaces();
         excelFileInput.value = "";
@@ -1131,7 +1149,7 @@ window.addEventListener("load", () => {
   });
 });
  
-// ===== INIT =====
+// ===== APPLICATION STARTUP =====
 window.addEventListener("load", () => {
   console.log("Page loaded - initializing app");
   loadPlaces();
@@ -1142,7 +1160,7 @@ window.addEventListener("load", () => {
   }, 100);
 });
 
-// ===== EXCEL GEOCODING IMPORT (moved from app.js into javascript.js)
+// ===== EXCEL GEOCODING HELPERS =====
 // Uses the existing `excelFile` input and the same Leaflet `map` instance.
 let excelMarkers = [];
 let excelBounds = L.latLngBounds();
@@ -1186,7 +1204,8 @@ async function geocodeAddress(address) {
     return null;
   }
 }
-// After getting Nominatim results, validate the city matches
+
+// ===== GEOCODE RESULT VALIDATION =====
 function validateGeocodeResult(results, expectedCity) {
   // Try to find a result where display_name contains the expected city
   const match = results.find(r => 
@@ -1207,6 +1226,7 @@ window.closeEditModal = closeEditModal;
 window.login = login;
 window.logout = logout;
 
+// ===== SIDEBAR COLLAPSE CONTROL =====
 const sidebar = document.getElementById("sidebar");
 const toggleSidebar = document.getElementById("toggle-sidebar");
 

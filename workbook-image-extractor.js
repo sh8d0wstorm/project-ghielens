@@ -1,4 +1,5 @@
 (function () {
+  // ===== XML AND ZIP HELPERS =====
   function xmlElementsByName(xml, name) {
     return Array.from(xml.getElementsByTagName("*")).filter(element => element.localName === name);
   }
@@ -12,6 +13,7 @@
   }
 
   function resolveZipPath(baseFilePath, target) {
+    // OOXML relationship targets are relative to the file that declares them.
     if (target.startsWith("/")) return target.slice(1);
 
     const parts = baseFilePath.split("/");
@@ -32,6 +34,7 @@
     ]));
   }
 
+  // ===== WORKBOOK IMAGE EXTRACTION =====
   async function extractWorkbookImages(workbookBytes, firstSheetName) {
     const zip = await JSZip.loadAsync(workbookBytes);
     const parser = new DOMParser();
@@ -78,6 +81,7 @@
     const sheetPath = resolveZipPath(workbookPath, sheetTarget);
     const sheetXml = await readXml(sheetPath);
 
+    // Newer Excel versions store in-cell pictures as rich-value metadata rather than drawings.
     const metadataPath = "xl/metadata.xml";
     if (zip.file(metadataPath)) {
       const metadataXml = await readXml(metadataPath);
@@ -141,6 +145,7 @@
       }
     }
 
+    // Also read traditional floating pictures, whose anchors identify their worksheet row.
     const drawingElement = xmlElementsByName(sheetXml, "drawing")[0];
     if (drawingElement) {
       const sheetRelationshipsPath = sheetPath.replace(/([^/]+)$/, "_rels/$1.rels");
@@ -171,6 +176,7 @@
           if (!imageTarget) throw new Error("Found an embedded picture without a media-file relationship.");
 
           const imagePath = resolveZipPath(drawingPath, imageTarget);
+          // Excel row indexes in OOXML start at zero; callers use the same worksheet index.
           await addImageForRow(Number(rowElement.textContent), imagePath);
         }
       }

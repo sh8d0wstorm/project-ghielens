@@ -1,3 +1,4 @@
+-- ===== ADMIN PHOTO UPLOAD POLICY =====
 drop policy if exists "Ghielens Firebase admin uploads place photos" on storage.objects;
 
 create policy "Ghielens Firebase admin uploads place photos"
@@ -15,10 +16,12 @@ with check (
   )
 );
 
+-- ===== STORAGE BUCKET CONFIGURATION CHECK =====
 select id, name, public, file_size_limit, allowed_mime_types
 from storage.buckets
 where id = 'place-photos';
 
+-- ===== STORAGE POLICY EXPOSURE CHECK =====
 select
   policyname,
   roles,

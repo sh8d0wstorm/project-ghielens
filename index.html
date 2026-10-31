@@ -3,31 +3,21 @@
 <head>
   <title>My First Map App</title>
 
-  <!-- =========================
-    🌍 Leaflet map styling
-  ========================== -->
+  <!-- ===== LEAFLET STYLES ===== -->
   <link rel="stylesheet" href=https://unpkg.com/leaflet@1.9.4/dist/leaflet.css>
 
-  <!-- =========================
-    🎨 Your custom styles
-  ========================== -->
+  <!-- ===== APP STYLES ===== -->
   <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-  <!-- =========================
-    📂 Hidden Excel import
-    (only visible in admin mode)
-  ========================== -->
+  <!-- ===== ADMIN EXCEL IMPORT INPUT ===== -->
   <input type="file" id="excelFile" accept=".xlsx" style="display:none;" />
 
   <div id="container">
 
-    <!-- =========================
-      📌 LEFT PANEL (UI)
-      search + list + admin tools
-    ========================== -->
+    <!-- ===== SIDEBAR: SEARCH, PLACE LIST, AND ADMIN TOOLS ===== -->
     <div id="sidebar">
     <button id="toggle-sidebar"
         type="button"
@@ -36,9 +26,7 @@
     ◀
 </button>
 
-  <!-- =========================
-    ➕ ADD LOCATION MODAL
-  ========================== -->
+  <!-- ===== ADD LOCATION MODAL ===== -->
   <div id="addModal" style="display:none; position:fixed; top:20%; left:50%; transform:translateX(-50%); background:white; padding:20px; border:1px solid #ccc; z-index:9999; width:300px;">
 
     <h3>Add Location</h3>
@@ -55,9 +43,7 @@
 
   </div>
 
-  <!-- =========================
-    ✏️ EDIT LOCATION MODAL
-  ========================== -->
+  <!-- ===== EDIT LOCATION MODAL ===== -->
   <div id="editModal" style="display:none;">
 
     <input id="e_name" placeholder="Name">
@@ -71,36 +57,26 @@
     <button onclick="closeEditModal()">close</button>
   </div>
 
-  <!-- =========================
-🔎 SEARCH BAR
-  ========================== -->
+  <!-- ===== PLACE SEARCH ===== -->
     <input id="search" placeholder="Zoek een plek...">
 
-    <!-- ======================
-    🔐 AUTH FORM
-  ========================== -->
+  <!-- ===== ADMIN AUTHENTICATION ===== -->
   <div id="loginForm">
     <input type="password" id="password" placeholder="Wachtwoord" />
     <button id="loginBtn" type="button" onclick="login()">log in</button>
   </div>
   <button id="logoutBtn" onclick="logout()" style="display:none;">log out</button>
 
-  <!-- =========================
-    ➕ ADD BUTTON (admin only)
-  ========================== -->
+  <!-- ===== ADMIN LOCATION CONTROLS ===== -->
   <button id="addBtn">add</button>
   <button id="pickMapBtn">pick location</button>
-  <!-- =========================
-    📍 PLACE LIST + DETAILS
-  ========================== -->
+  <!-- ===== PLACE LIST AND DETAILS ===== -->
   <div id="list"></div>
   <div id="details"></div>
 
     </div>
 
-    <!-- =========================
-      🗺 MAP AREA
-    ========================== -->
+    <!-- ===== MAP AREA ===== -->
     <button id="locateMe" type="button">
     Show my location
 </button>
@@ -108,22 +84,20 @@
 
   </div>
 
-  <!-- =========================
-    📦 LIBRARIES
-  ========================== -->
+  <!-- ===== EXTERNAL LIBRARIES ===== -->
 
-  <!-- Leaflet map engine -->
+  <!-- ===== LEAFLET MAP ENGINE ===== -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-  <!-- Fuse.js fuzzy search -->
+  <!-- ===== FUZZY SEARCH ===== -->
   <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2"></script>
 
-  <!-- Excel workbook reader and ZIP image extraction -->
+  <!-- ===== EXCEL WORKBOOK AND IMAGE EXTRACTION ===== -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="workbook-image-extractor.js"></script>
 
-  <!-- Your app logic -->
+  <!-- ===== APP LOGIC ===== -->
   <script type="module" src="javascript.js"></script>
 
 </body>
