@@ -129,6 +129,23 @@ function normalizePlaceCoordinates(place) {
 
   return place;
 }
+
+function normalizeKeywordList(...values) {
+  const keywords = values
+    .flatMap(value => Array.isArray(value) ? value : [value])
+    .flatMap(value => String(value || "").split(/[,;\n|]+/))
+    .map(keyword => keyword.trim())
+    .filter(Boolean);
+  const seen = new Set();
+
+  return keywords.filter(keyword => {
+    const normalized = keyword.toLocaleLowerCase();
+    if (seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+}
+
 function parseCoord(value) {
   if (value === null || value === undefined) return null;
   if (typeof value === "number") {
@@ -261,7 +278,7 @@ function loadPlaces() {
         ing,
         description: data.description || "",
         image: sanitizeImageArray(data.image || data.images || data.img || ""),
-        keyword: data.keyword || data.keywords || []
+        keyword: normalizeKeywordList(data.keyword, data.keywords)
       });
 
       // Render Leaflet marker safely if coordinate data evaluates successfully
@@ -987,6 +1004,8 @@ window.addEventListener("load", () => {
       let firestoreSaveErrorCount = 0;
       let matchedImageCount = 0;
       let extractedImageCount = null;
+      let keywordColumnsFound = false;
+      let keywordRecordCount = 0;
 
       try {
         // Read worksheet rows and extract embedded pictures from the same workbook.
@@ -998,15 +1017,32 @@ window.addEventListener("load", () => {
         const sheetRowOffset = sheet["!ref"]
           ? XLSX.utils.decode_range(sheet["!ref"]).s.r
           : 0;
-        const headerNames = (rows[0] || []).map(value => String(value).trim().toLowerCase());
-        const hasHeader = ["name", "address", "adres", "naam"].includes(headerNames[0]);
-        const firstDataRow = hasHeader ? 1 : 0;
+        const normalizeHeader = value =>
+          String(value).replace(/[\uFEFF\u00A0]/g, " ").trim().toLowerCase();
+        const addressHeaders = ["name", "address", "adres", "naam"];
+        const headerRowIndex = rows
+          .slice(0, 10)
+          .findIndex(cells => cells.some(value => addressHeaders.includes(normalizeHeader(value))));
+        const hasHeader = headerRowIndex >= 0;
+        const headerNames = hasHeader
+          ? rows[headerRowIndex].map(normalizeHeader)
+          : [];
+        const addressColumnIndex = hasHeader
+          ? headerNames.findIndex(header => addressHeaders.includes(header))
+          : 0;
+        const firstDataRow = hasHeader ? headerRowIndex + 1 : 0;
         const keywordColumnIndexes = hasHeader
           ? headerNames.reduce((indexes, header, index) => {
               if (["keyword", "keywords"].includes(header)) indexes.push(index);
               return indexes;
             }, [])
           : [];
+        keywordColumnsFound = keywordColumnIndexes.length > 0;
+        if (keywordColumnsFound) {
+          console.info(`Found ${keywordColumnIndexes.length} keyword column(s) in worksheet "${firstSheetName}".`);
+        } else {
+          console.warn(`No keyword column found in worksheet "${firstSheetName}". Expected a header named "keyword" or "keywords".`);
+        }
         let imagesByRow;
         try {
           imagesByRow = await window.extractWorkbookImages(workbookBytes, firstSheetName);
@@ -1034,7 +1070,7 @@ window.addEventListener("load", () => {
 
         for (let rowNumber = firstDataRow; rowNumber < rows.length; rowNumber++) {
           const cells = rows[rowNumber] || [];
-          const address = String(cells[0] || "").trim();
+          const address = String(cells[addressColumnIndex] || "").trim();
           if (!address) continue;
 
           const row = {};
@@ -1074,16 +1110,15 @@ window.addEventListener("load", () => {
             }
 
             const descriptionKey = headerNames.find(header => ["description", "beschrijving", "omschrijving"].includes(header));
-            const keywords = keywordColumnIndexes
-              .flatMap(columnIndex => String(cells[columnIndex] || "").split(","))
-              .map(keyword => keyword.trim())
-              .filter(Boolean);
+            const keywords = normalizeKeywordList(
+              ...keywordColumnIndexes.map(columnIndex => cells[columnIndex])
+            );
             const place = {
               name: address,
               description: descriptionKey ? row[descriptionKey] || "" : "",
               lat: parseCoord(coordinates.lat),
               ing: parseCoord(coordinates.ing),
-              ...(keywordColumnIndexes.length ? { keyword: [...new Set(keywords)] } : {})
+              ...(keywordColumnIndexes.length ? { keyword: keywords } : {})
             };
             const normalizedAddress = normalizeAddressKey(address);
             const existingPlace = existingPlaces.get(normalizedAddress);
@@ -1118,6 +1153,7 @@ window.addEventListener("load", () => {
             }
 
             successCount++;
+            if (keywords.length) keywordRecordCount++;
           } catch (error) {
             errorCount++;
             console.error(`Import failed for ${address}:`, error);
@@ -1134,8 +1170,13 @@ window.addEventListener("load", () => {
         isImporting = false;
         await loadPlaces();
         excelFileInput.value = "";
-        console.log(`Import complete. Extracted pictures: ${typeof extractedImageCount === "number" ? extractedImageCount : "unavailable"}; matched workbook images: ${matchedImageCount}; places saved: ${successCount}; row/save errors: ${errorCount}; Firestore save errors: ${firestoreSaveErrorCount}; upload errors: ${imageErrorCount}.`);
+        console.log(`Import complete. Extracted pictures: ${typeof extractedImageCount === "number" ? extractedImageCount : "unavailable"}; matched workbook images: ${matchedImageCount}; places saved: ${successCount}; places saved with keywords: ${keywordRecordCount}; row/save errors: ${errorCount}; Firestore save errors: ${firestoreSaveErrorCount}; upload errors: ${imageErrorCount}.`);
         const importWarnings = [];
+        if (!keywordColumnsFound) {
+          importWarnings.push('No "keyword" or "keywords" column was detected in the first worksheet, so no keywords were imported.');
+        } else if (keywordRecordCount === 0) {
+          importWarnings.push("Keyword columns were detected, but no non-empty keywords were saved. Check the header row and cell values.");
+        }
         if (typeof extractedImageCount === "number" && extractedImageCount === 0) {
           importWarnings.push("No embedded pictures were extracted from the first worksheet.");
         } else if (typeof extractedImageCount === "number" && matchedImageCount < extractedImageCount) {
