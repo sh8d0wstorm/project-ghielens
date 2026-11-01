@@ -630,6 +630,16 @@ function showDetails(place) {
 
       if (!popup) return;
 
+      const popupContentElement = popup.querySelector(".leaflet-popup-content");
+      if (popupContentElement) {
+        ["touchstart", "touchmove", "touchend", "pointerdown", "pointermove", "pointerup"]
+          .forEach(eventName => {
+            popupContentElement.addEventListener(eventName, event => {
+              event.stopPropagation();
+            });
+          });
+      }
+
       attachGalleryControls(popup);
 
       const editBtn = popup.querySelector(".popup-edit-btn");
