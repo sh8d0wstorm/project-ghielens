@@ -1001,6 +1001,12 @@ window.addEventListener("load", () => {
         const headerNames = (rows[0] || []).map(value => String(value).trim().toLowerCase());
         const hasHeader = ["name", "address", "adres", "naam"].includes(headerNames[0]);
         const firstDataRow = hasHeader ? 1 : 0;
+        const keywordColumnIndexes = hasHeader
+          ? headerNames.reduce((indexes, header, index) => {
+              if (["keyword", "keywords"].includes(header)) indexes.push(index);
+              return indexes;
+            }, [])
+          : [];
         let imagesByRow;
         try {
           imagesByRow = await window.extractWorkbookImages(workbookBytes, firstSheetName);
@@ -1068,11 +1074,16 @@ window.addEventListener("load", () => {
             }
 
             const descriptionKey = headerNames.find(header => ["description", "beschrijving", "omschrijving"].includes(header));
+            const keywords = keywordColumnIndexes
+              .flatMap(columnIndex => String(cells[columnIndex] || "").split(","))
+              .map(keyword => keyword.trim())
+              .filter(Boolean);
             const place = {
               name: address,
               description: descriptionKey ? row[descriptionKey] || "" : "",
               lat: parseCoord(coordinates.lat),
-              ing: parseCoord(coordinates.ing)
+              ing: parseCoord(coordinates.ing),
+              ...(keywordColumnIndexes.length ? { keyword: [...new Set(keywords)] } : {})
             };
             const normalizedAddress = normalizeAddressKey(address);
             const existingPlace = existingPlaces.get(normalizedAddress);
