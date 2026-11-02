@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Uitgevoerde werven</title>
+  <title>Uitgevoerde werven
+
+
+  </title>
 
   <!-- ===== LEAFLET STYLES ===== -->
   <link rel="stylesheet" href=https://unpkg.com/leaflet@1.9.4/dist/leaflet.css>
@@ -59,8 +62,45 @@
     <button onclick="closeEditModal()">close</button>
   </div>
 
-  <!-- ===== PLACE SEARCH ===== -->
-    <input id="search" placeholder="Zoek een plek...">
+  <!-- ===== KEYWORD SEARCH ===== -->
+<div id="keyword-search" class="search-section">
+    <label for="keywordDropdown">Zoek op trefwoord</label>
+
+    <details id="keywordDropdown">
+        <summary>Selecteer trefwoorden</summary>
+        <div id="keywordOptions" class="keyword-options">
+            <!-- Keywords will be added dynamically -->
+        </div>
+    </details>
+</div>
+
+<!-- Admin-only keyword management -->
+<div id="keywordAdmin" style="display: none;">
+    <label for="newKeyword">Beheer trefwoorden</label>
+
+    <div>
+        <input
+            type="text"
+            id="newKeyword"
+            placeholder="Nieuw trefwoord..."
+        >
+
+        <button type="button" id="addKeywordBtn">
+            Trefwoord toevoegen
+        </button>
+    </div>
+
+    <div id="adminKeywordList"></div>
+</div>
+<!-- ===== STREET NAME SEARCH ===== -->
+<div id="street-search" class="search-section">
+    <label for="streetSearch">Zoek op straatnaam</label>
+    <input
+        type="text"
+        id="streetSearch"
+        placeholder="Typ een straatnaam..."
+    >
+</div>
 
   <!-- ===== ADMIN AUTHENTICATION ===== -->
   <div id="loginForm">

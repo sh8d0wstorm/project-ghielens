@@ -85,6 +85,7 @@ let markers = [];        // leaflet markers on map
 let isAdding = false;    // future: add-mode state
 let editingPlace = null; // currently edited place
 let places = [];
+let sharedKeywords = [];
 let fuse; // declare first
 let isImporting = false; // prevent snapshot updates during import
 
@@ -314,10 +315,95 @@ markers.push(marker);
     console.log("✅ Loaded from Firebase. Total places:", places.length, places.map(p => p.name));
 
     if (!fuse) initFuse(); else fuse.setCollection(places);
-    renderPlaces(places);
+    applyPlaceFilters();
   }, (err) => {
     console.error("Firebase subscription error:", err);
   });
+}
+
+function loadSharedKeywords() {
+  onSnapshot(collection(db, "keywords"), snapshot => {
+    sharedKeywords = snapshot.docs.map(document => ({
+      id: document.id,
+      name: document.data().name
+    }));
+
+    renderSharedKeywords();
+  });
+}
+
+function renderSharedKeywords() {
+  keywordOptionsContainer.innerHTML = "";
+  adminKeywordList.innerHTML = "";
+
+  sharedKeywords.forEach(keyword => {
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+
+    checkbox.type = "checkbox";
+    checkbox.value = keyword.name;
+
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(" " + keyword.name));
+    keywordOptionsContainer.appendChild(label);
+
+    const adminItem = document.createElement("div");
+    const name = document.createElement("span");
+    const deleteButton = document.createElement("button");
+
+    name.textContent = keyword.name;
+    deleteButton.textContent = "Verwijderen";
+    deleteButton.type = "button";
+    deleteButton.addEventListener("click", () => {
+      deleteSharedKeyword(keyword.id);
+    });
+
+    adminItem.appendChild(name);
+    adminItem.appendChild(deleteButton);
+    adminKeywordList.appendChild(adminItem);
+  });
+}
+
+async function addSharedKeyword() {
+  if (!adminMode) return;
+
+  const name = newKeywordInput.value.trim();
+
+  if (!name) return;
+
+  const alreadyExists = sharedKeywords.some(keyword =>
+    keyword.name.toLocaleLowerCase("nl") === name.toLocaleLowerCase("nl")
+  );
+
+  if (alreadyExists) {
+    alert("Dit trefwoord bestaat al.");
+    return;
+  }
+
+  try {
+    await addDoc(collection(db, "keywords"), { name });
+    newKeywordInput.value = "";
+  } catch (error) {
+    console.error("Fout bij toevoegen trefwoord:", error);
+    alert("Het trefwoord kon niet worden toegevoegd.");
+  }
+}
+
+async function deleteSharedKeyword(keywordId) {
+  if (!adminMode) return;
+
+  const confirmed = confirm(
+    "Weet je zeker dat je dit trefwoord wilt verwijderen?"
+  );
+
+  if (!confirmed) return;
+
+  try {
+    await deleteDoc(doc(db, "keywords", keywordId));
+  } catch (error) {
+    console.error("Fout bij verwijderen trefwoord:", error);
+    alert("Het trefwoord kon niet worden verwijderd.");
+  }
 }
 
 // ===== MAP SETUP =====
@@ -421,8 +507,13 @@ document.getElementById("locateMe").addEventListener("click", function () {
 // ===== UI ELEMENTS =====
 const listContainer = document.getElementById("list");
 const detailsContainer = document.getElementById("details");
-const searchInput = document.getElementById("search");
-
+const streetSearchInput = document.getElementById("streetSearch");
+const keywordOptionsContainer = document.getElementById("keywordOptions");
+const keywordAdmin = document.getElementById("keywordAdmin");
+const newKeywordInput = document.getElementById("newKeyword");
+const addKeywordBtn = document.getElementById("addKeywordBtn");
+const adminKeywordList = document.getElementById("adminKeywordList");
+addKeywordBtn.addEventListener("click", addSharedKeyword);
 // ===== IMAGE URL NORMALIZATION =====
 function normalizeImageList(value) {
   if (!value) return [];
@@ -798,6 +889,7 @@ function updateUI() {
   const passwordInput = document.getElementById("password");
 
   if (addBtn) addBtn.style.display = adminMode ? "inline-block" : "none";
+  if (keywordAdmin) keywordAdmin.style.display = adminMode ? "block" : "none";
   if (excelFile) excelFile.style.display = adminMode ? "block" : "none";
   if (excelFile) excelFile.disabled = !adminMode;
 
@@ -885,59 +977,47 @@ function renderPlaces(list) {
 }
 
 // ===== SEARCH =====
-function searchPlaces(query) {
-  const text = query.trim();
-  if (!text) {
-    return renderPlaces(places);
-  }
 
-  const coordinateMatch = text.match(/^(-?\d+(?:[.,]\d+)?)\s*[ ,]\s*(-?\d+(?:[.,]\d+)?)$/);
-  if (coordinateMatch) {
-    const lat = parseCoord(coordinateMatch[1]);
-    const ing = parseCoord(coordinateMatch[2]);
+function applyPlaceFilters() {
+    const streetQuery = streetSearchInput.value
+        .trim()
+        .toLocaleLowerCase("nl");
 
-    if (lat != null && ing != null) {
-      const exactMatches = places.filter(place => {
-        const plat = parseCoord(place.lat);
-        const ping = parseCoord(place.ing);
-        return plat != null && ping != null && Math.abs(plat - lat) < 0.000001 && Math.abs(ping - ing) < 0.000001;
-      });
+    const selectedKeywords = [
+        ...keywordOptionsContainer.querySelectorAll(
+            'input[type="checkbox"]:checked'
+        )
+    ].map(input => input.value.toLocaleLowerCase("nl"));
 
-      if (exactMatches.length) {
-        return renderPlaces(exactMatches);
-      }
+    const filteredPlaces = places.filter(place => {
+        const address = String(place.name || "")
+            .toLocaleLowerCase("nl");
 
-      let closest = null;
-      let minDistance = Infinity;
-      places.forEach(place => {
-        const plat = parseCoord(place.lat);
-        const ping = parseCoord(place.ing);
-        if (plat == null || ping == null) return;
-        const distance = (plat - lat) ** 2 + (ping - ing) ** 2;
-        if (distance < minDistance) {
-          minDistance = distance;
-          closest = place;
-        }
-      });
+        const placeKeywords = normalizeKeywordList(
+            place.keyword
+        ).map(keyword => keyword.toLocaleLowerCase("nl"));
 
-      if (closest) {
-        return renderPlaces([closest]);
-      }
-    }
-  }
+        const matchesStreet =
+            !streetQuery || address.includes(streetQuery);
 
-  if (!fuse) {
-    initFuse();
-  }
+        const matchesKeyword =
+            selectedKeywords.length === 0 ||
+            selectedKeywords.some(keyword =>
+                placeKeywords.includes(keyword)
+            );
 
-  const result = fuse.search(text);
-  renderPlaces(result.map(r => r.item));
+        return matchesStreet && matchesKeyword;
+    });
+
+    renderPlaces(filteredPlaces);
 }
 
-// Refresh the visible places as the user types.
-searchInput.addEventListener("input", () => {
-  searchPlaces(searchInput.value);
-});
+// Update results when the street search changes.
+streetSearchInput.addEventListener("input", applyPlaceFilters);
+
+// Update results when a keyword checkbox changes.
+keywordOptionsContainer.addEventListener("change", applyPlaceFilters);
+
 // ===== ADMIN AUTHENTICATION =====
 
 async function login() {
@@ -1215,6 +1295,7 @@ window.addEventListener("load", () => {
 window.addEventListener("load", () => {
   console.log("Page loaded - initializing app");
   loadPlaces();
+  loadSharedKeywords();
   updateUI();
 
   setTimeout(() => {
