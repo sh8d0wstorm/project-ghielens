@@ -102,13 +102,30 @@
     >
 </div>
 
-  <!-- ===== ADMIN AUTHENTICATION ===== -->
-  <div id="loginForm">
-    <input type="password" id="password" placeholder="Wachtwoord" />
-    <button id="loginBtn" type="button" onclick="login()">log in</button>
-  </div>
-  <button id="logoutBtn" onclick="logout()" style="display:none;">log out</button>
+  <!-- ===== ADMIN MENU ===== -->
+<div id="adminMenu">
+    <button
+        type="button"
+        id="adminMenuToggle"
+        aria-expanded="false"
+        aria-controls="adminMenuContent">
+        ☰ Beheer
+    </button>
 
+    <div id="adminMenuContent" style="display:none;">
+
+        <!-- ===== ADMIN AUTHENTICATION ===== -->
+        <div id="loginForm">
+            <input type="password" id="password" placeholder="Wachtwoord" />
+            <button id="loginBtn" type="button" onclick="login()">log in</button>
+        </div>
+
+        <button id="logoutBtn" onclick="logout()" style="display:none;">
+            log out
+        </button>
+
+    </div>
+</div>
   <!-- ===== ADMIN LOCATION CONTROLS ===== -->
   <button id="addBtn">add</button>
   <button id="pickMapBtn">pick location</button>

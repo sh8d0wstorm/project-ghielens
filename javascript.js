@@ -1387,3 +1387,13 @@ toggleSidebar.addEventListener("click", () => {
         toggleSidebar.style.left = isCollapsed ? "0" : "250px";
     }
 });
+// ===== ADMIN MENU TOGGLE =====
+const adminMenuToggle = document.getElementById("adminMenuToggle");
+const adminMenuContent = document.getElementById("adminMenuContent");
+
+adminMenuToggle.addEventListener("click", () => {
+    const isOpen = adminMenuContent.style.display !== "none";
+
+    adminMenuContent.style.display = isOpen ? "none" : "block";
+    adminMenuToggle.setAttribute("aria-expanded", !isOpen);
+});
